@@ -11,9 +11,11 @@ RUN npm ci --omit=dev
 
 COPY src ./src
 
-# La base vive en un volumen para que no se pierda en cada despliegue.
+# La base tiene que vivir en un volumen montado en /app/data, o se pierde en
+# cada despliegue. El volumen NO se declara aquí: Railway lo rechaza y quiere
+# gestionarlo desde su panel. Con Docker a secas se monta al arrancar:
+#   docker run -v $(pwd)/data:/app/data ...
 RUN mkdir -p /app/data
-VOLUME ["/app/data"]
 
 ENV NODE_ENV=production
 EXPOSE 3000
