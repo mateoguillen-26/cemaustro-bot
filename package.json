@@ -1,0 +1,33 @@
+{
+  "name": "cemaustro-bot",
+  "version": "1.0.0",
+  "description": "Asistente de educación en diabetes por WhatsApp para pacientes verificados (español, Ecuador)",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "migrate": "node src/db/migrations.js",
+    "importar-docs": "node src/scripts/importarDocs.js",
+    "importar-pacientes": "node src/scripts/importarPacientes.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "diabetes",
+    "salud",
+    "chatbot"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "better-sqlite3": "^12.9.0",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "openai": "^4.77.0"
+  }
+}
