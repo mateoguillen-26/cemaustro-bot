@@ -86,6 +86,66 @@ export function problemaConLaPassword(password) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Papeles                                                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Quién puede hacer qué.
+ *
+ *   administrador -> todo, incluido lo que cambia cómo responde el asistente.
+ *   doctor        -> lo clínico: pacientes, alertas y conocimiento.
+ *
+ * El reparto no es por desconfianza: la configuración contiene el prompt
+ * clínico, y un cambio ahí altera lo que el bot le dice a TODOS los pacientes.
+ * Eso merece una sola mano.
+ */
+export const ROLES = {
+  ADMINISTRADOR: 'administrador',
+  DOCTOR: 'doctor',
+};
+
+export const ETIQUETA_ROL = {
+  [ROLES.ADMINISTRADOR]: 'Administrador',
+  [ROLES.DOCTOR]: 'Doctor',
+};
+
+/** Secciones reservadas al administrador (rutas dentro de /admin). */
+export const SECCIONES_DE_ADMIN = ['/configuracion', '/usuarios', '/seguridad'];
+
+export function esAdministrador(usuario) {
+  return usuario?.role === ROLES.ADMINISTRADOR;
+}
+
+/**
+ * Cierra las secciones de administrador a quien no lo sea.
+ *
+ * Se comprueba por prefijo de ruta y no route por route a propósito: si
+ * mañana alguien agrega /admin/usuarios/algo-nuevo, queda protegido solo,
+ * sin tener que acordarse.
+ */
+export function guardaDeSecciones(req, res, next) {
+  const restringida = SECCIONES_DE_ADMIN.some(
+    (prefijo) => req.path === prefijo || req.path.startsWith(`${prefijo}/`),
+  );
+
+  if (restringida && !esAdministrador(req.usuario)) {
+    logger.warn(
+      `"${req.usuario.username}" intentó entrar a ${req.path} sin ser administrador.`,
+    );
+    return res
+      .status(403)
+      .type('html')
+      .send(
+        `<h1>Sin permiso</h1>
+         <p>Esta sección es solo para administradores.</p>
+         <p><a href="/admin">Volver al panel</a></p>`,
+      );
+  }
+
+  return next();
+}
+
+/* ------------------------------------------------------------------ */
 /* Usuario inicial                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -111,6 +171,7 @@ export function asegurarUsuarioInicial() {
     usuario: config.admin.usuario,
     hash: resumirPassword(config.admin.password),
     nombre: null,
+    rol: ROLES.ADMINISTRADOR,
   });
 
   logger.info(`Usuario inicial del panel creado a partir del .env: "${config.admin.usuario}".`);

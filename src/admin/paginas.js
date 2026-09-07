@@ -558,7 +558,15 @@ export function seguridad(intentos, incidencias, advertencias) {
 export function cuenta(usuario) {
   return `
     <h1>Mi cuenta</h1>
-    <p class="sub">Su usuario es <code>${esc(usuario.username)}</code>.</p>
+    <p class="sub">
+      Su usuario es <code>${esc(usuario.username)}</code> y entra como
+      <b>${usuario.role === 'administrador' ? 'administrador' : 'doctor'}</b>.
+      ${
+        usuario.role === 'administrador'
+          ? 'Ve y puede cambiar todo el panel.'
+          : 'Ve pacientes, alertas y conocimiento. La configuración del asistente la lleva un administrador.'
+      }
+    </p>
 
     <h2>Nombre de usuario</h2>
     <div class="tarjeta">
@@ -622,9 +630,20 @@ export function usuarios(lista, yo) {
   const filas = lista
     .map((u) => {
       const esYo = u.id === yo.id;
+      const esAdmin = u.role === 'administrador';
       const estado = u.active
         ? '<span class="etiqueta et-ok">Activo</span>'
         : '<span class="etiqueta et-gris">Sin acceso</span>';
+
+      // Cambiarse el papel a uno mismo es perder el acceso a esta página.
+      const papel = esYo
+        ? `<span class="etiqueta ${esAdmin ? 'et-ok' : 'et-gris'}">${esAdmin ? 'Administrador' : 'Doctor'}</span>`
+        : `<form method="post" action="/admin/usuarios/${u.id}/rol" class="enlinea">
+             <input type="hidden" name="rol" value="${esAdmin ? 'doctor' : 'administrador'}">
+             <button type="submit" class="chico secundario">
+               ${esAdmin ? 'Administrador ▾' : 'Doctor ▾'}
+             </button>
+           </form>`;
 
       // Nadie puede quitarse el acceso a sí mismo: sería la forma más rápida
       // de quedarse fuera del panel sin manera de volver a entrar.
@@ -640,6 +659,7 @@ export function usuarios(lista, yo) {
       return `<tr>
         <td><b>${esc(u.username)}</b></td>
         <td>${esc(u.name ?? '—')}</td>
+        <td>${papel}</td>
         <td>${estado}</td>
         <td>${esc(u.last_login_at ? fechaCorta(u.last_login_at) : 'Nunca ha entrado')}</td>
         <td>${accion}</td>
@@ -649,15 +669,20 @@ export function usuarios(lista, yo) {
 
   return `
     <h1>Usuarios</h1>
-    <p class="sub">Quién puede entrar al panel. Todos ven lo mismo y pueden hacer lo mismo.</p>
+    <p class="sub">Quién puede entrar al panel y hasta dónde llega.</p>
 
     <div class="tarjeta">
       <table>
         <thead>
-          <tr><th>Usuario</th><th>Nombre</th><th>Estado</th><th>Última entrada</th><th></th></tr>
+          <tr><th>Usuario</th><th>Nombre</th><th>Papel</th><th>Estado</th><th>Última entrada</th><th></th></tr>
         </thead>
         <tbody>${filas}</tbody>
       </table>
+      <p class="sub" style="font-size:13px; margin:14px 0 0">
+        El botón del papel lo cambia al otro. <b>Administrador</b> ve todo.
+        <b>Doctor</b> ve pacientes, alertas y conocimiento, pero no la configuración
+        del asistente, ni los usuarios, ni la seguridad.
+      </p>
     </div>
 
     <h2>Crear un usuario</h2>
@@ -671,6 +696,12 @@ export function usuarios(lista, yo) {
 
         <label for="nuevo-nombre">Nombre <small>Opcional, para reconocerlo de un vistazo.</small></label>
         <input type="text" id="nuevo-nombre" name="nombre" placeholder="Dr. Juan Pérez" maxlength="80">
+
+        <label for="nuevo-rol">Papel</label>
+        <select id="nuevo-rol" name="rol">
+          <option value="doctor" selected>Doctor — pacientes, alertas y conocimiento</option>
+          <option value="administrador">Administrador — además configuración, usuarios y seguridad</option>
+        </select>
 
         <label for="nueva-password">Contraseña provisional
           <small>Al menos 12 caracteres. Entréguesela en persona y pídale que la

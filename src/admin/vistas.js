@@ -139,17 +139,24 @@ const SECCIONES = [
   { ruta: '/admin/pacientes', etiqueta: 'Pacientes' },
   { ruta: '/admin/alertas', etiqueta: 'Alertas' },
   { ruta: '/admin/conocimiento', etiqueta: 'Conocimiento' },
-  { ruta: '/admin/configuracion', etiqueta: 'Configuración' },
-  { ruta: '/admin/usuarios', etiqueta: 'Usuarios' },
-  { ruta: '/admin/seguridad', etiqueta: 'Seguridad' },
+  { ruta: '/admin/configuracion', etiqueta: 'Configuración', soloAdmin: true },
+  { ruta: '/admin/usuarios', etiqueta: 'Usuarios', soloAdmin: true },
+  { ruta: '/admin/seguridad', etiqueta: 'Seguridad', soloAdmin: true },
 ];
 
 /** Envuelve el contenido en la plantilla del panel. */
 export function pagina({ titulo, activo, contenido, aviso = null, usuario = null }) {
-  const menu = SECCIONES.map(
-    (s) =>
-      `<a href="${s.ruta}" class="${s.ruta === activo ? 'activo' : ''}">${esc(s.etiqueta)}</a>`,
-  ).join('');
+  // Al doctor no se le enseñan las secciones que no puede abrir: un menú con
+  // puertas cerradas solo invita a empujarlas. El guardia del router es quien
+  // de verdad las protege; esto es cortesía, no seguridad.
+  const esAdmin = usuario?.role === 'administrador';
+
+  const menu = SECCIONES.filter((s) => esAdmin || !s.soloAdmin)
+    .map(
+      (s) =>
+        `<a href="${s.ruta}" class="${s.ruta === activo ? 'activo' : ''}">${esc(s.etiqueta)}</a>`,
+    )
+    .join('');
 
   const banda = aviso
     ? `<div class="aviso aviso-${aviso.tipo === 'error' ? 'error' : 'ok'}">${esc(aviso.texto)}</div>`

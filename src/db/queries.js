@@ -578,10 +578,10 @@ export function listarUsuariosPanel() {
     .all();
 }
 
-export function crearUsuarioPanel({ usuario, hash, nombre = null }) {
+export function crearUsuarioPanel({ usuario, hash, nombre = null, rol }) {
   const info = obtenerDB()
-    .prepare('INSERT INTO admin_users (username, password_hash, name) VALUES (?, ?, ?)')
-    .run(String(usuario).trim(), hash, nombre);
+    .prepare('INSERT INTO admin_users (username, password_hash, name, role) VALUES (?, ?, ?, ?)')
+    .run(String(usuario).trim(), hash, nombre, rol);
   return usuarioPanelPorId(info.lastInsertRowid);
 }
 
@@ -605,4 +605,15 @@ export function cambiarNombreUsuarioPanel(id, nombre) {
 
 export function cambiarUsuarioPanel(id, usuario) {
   obtenerDB().prepare('UPDATE admin_users SET username = ? WHERE id = ?').run(usuario, id);
+}
+
+/** Administradores que pueden entrar ahora mismo. */
+export function contarAdministradoresPanel() {
+  return obtenerDB()
+    .prepare("SELECT COUNT(*) AS n FROM admin_users WHERE active = 1 AND role = 'administrador'")
+    .get().n;
+}
+
+export function cambiarRolPanel(id, rol) {
+  obtenerDB().prepare('UPDATE admin_users SET role = ? WHERE id = ?').run(rol, id);
 }

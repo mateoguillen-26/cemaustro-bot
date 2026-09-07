@@ -212,6 +212,24 @@ const MIGRACIONES = [
       );
     `,
   },
+  {
+    version: 7,
+    nombre: 'roles del panel',
+    sql: `
+      -- Dos papeles:
+      --   'administrador' -> todo, incluida la configuración del asistente,
+      --                      los usuarios y el registro de seguridad.
+      --   'doctor'        -> lo clínico: pacientes, alertas y conocimiento.
+      --
+      -- El valor por defecto es el más limitado a propósito: si algún día se
+      -- crea una fila sin decir el papel, que se quede corta de permisos y no
+      -- que se los regale todos.
+      ALTER TABLE admin_users ADD COLUMN role TEXT NOT NULL DEFAULT 'doctor';
+
+      -- Las cuentas que ya existían son las que montaron el sistema.
+      UPDATE admin_users SET role = 'administrador';
+    `,
+  },
 ];
 
 /** Aplica las migraciones que falten. Devuelve la versión final del esquema. */

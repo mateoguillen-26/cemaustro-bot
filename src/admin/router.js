@@ -13,9 +13,12 @@ import {
   abrirSesion,
   anotarFallo,
   cerrarSesion,
+  esAdministrador,
   estaBloqueado,
+  guardaDeSecciones,
   minutosQueFaltan,
   mismoOrigen,
+  ROLES,
   olvidarFallos,
   passwordCorrecta,
   problemaConLaPassword,
@@ -108,6 +111,9 @@ adminRouter.post('/salir', (req, res) => {
 /* ------------------------------------------------------------------ */
 
 adminRouter.use(requiereSesion);
+
+// Y algunas secciones, además, solo para administradores.
+adminRouter.use(guardaDeSecciones);
 
 /** Normaliza un teléfono escrito a mano: solo dígitos, sin '+' ni espacios. */
 function normalizarTelefono(valor) {
@@ -591,8 +597,11 @@ adminRouter.post('/usuarios', (req, res) => {
   const problema = problemaConLaPassword(password);
   if (problema) return volver(res, '/admin/usuarios', { tipo: 'error', texto: problema });
 
-  db.crearUsuarioPanel({ usuario, hash: resumirPassword(password), nombre });
-  logger.info(`Usuario del panel creado: "${usuario}" (por "${req.usuario.username}").`);
+  // Ante cualquier valor raro, el papel más limitado.
+  const rol = req.body.rol === ROLES.ADMINISTRADOR ? ROLES.ADMINISTRADOR : ROLES.DOCTOR;
+
+  db.crearUsuarioPanel({ usuario, hash: resumirPassword(password), nombre, rol });
+  logger.info(`Usuario del panel creado: "${usuario}" como ${rol} (por "${req.usuario.username}").`);
 
   return volver(res, '/admin/usuarios', {
     tipo: 'ok',
@@ -621,11 +630,51 @@ adminRouter.post('/usuarios/:id/acceso', (req, res) => {
     });
   }
 
+  // Y sin administradores nadie podría volver a tocar la configuración ni
+  // devolverle el acceso a nadie: el panel quedaría a medio gas para siempre.
+  if (!activar && esAdministrador(objetivo) && db.contarAdministradoresPanel() <= 1) {
+    return volver(res, '/admin/usuarios', {
+      tipo: 'error',
+      texto: 'Es el último administrador: nombre a otro antes de quitarle el acceso.',
+    });
+  }
+
   db.activarUsuarioPanel(id, activar);
   logger.info(`Acceso al panel ${activar ? 'devuelto a' : 'retirado a'} "${objetivo.username}".`);
 
   return volver(res, '/admin/usuarios', {
     tipo: 'ok',
     texto: activar ? `"${objetivo.username}" vuelve a tener acceso.` : `"${objetivo.username}" ya no puede entrar.`,
+  });
+});
+
+adminRouter.post('/usuarios/:id/rol', (req, res) => {
+  const id = Number(req.params.id);
+  const rol = req.body.rol === ROLES.ADMINISTRADOR ? ROLES.ADMINISTRADOR : ROLES.DOCTOR;
+
+  const objetivo = db.usuarioPanelPorId(id);
+  if (!objetivo) return volver(res, '/admin/usuarios', { tipo: 'error', texto: 'Ese usuario no existe.' });
+
+  // Bajarse a uno mismo el papel es perder el acceso a esta misma página.
+  if (id === req.usuario.id) {
+    return volver(res, '/admin/usuarios', {
+      tipo: 'error',
+      texto: 'No puede cambiarse su propio papel. Pídaselo a otro administrador.',
+    });
+  }
+
+  if (rol !== ROLES.ADMINISTRADOR && esAdministrador(objetivo) && db.contarAdministradoresPanel() <= 1) {
+    return volver(res, '/admin/usuarios', {
+      tipo: 'error',
+      texto: 'Es el último administrador: nombre a otro antes de bajarle el papel.',
+    });
+  }
+
+  db.cambiarRolPanel(id, rol);
+  logger.info(`"${objetivo.username}" pasa a ser ${rol} (por "${req.usuario.username}").`);
+
+  return volver(res, '/admin/usuarios', {
+    tipo: 'ok',
+    texto: `"${objetivo.username}" ahora es ${rol === ROLES.ADMINISTRADOR ? 'administrador' : 'doctor'}.`,
   });
 });
