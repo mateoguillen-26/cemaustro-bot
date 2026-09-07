@@ -71,17 +71,57 @@ export function passwordCorrecta(password, guardado) {
   }
 }
 
+/** Largo mínimo. Es la regla que de verdad cuesta romper. */
+export const LARGO_MINIMO = 12;
+
 /**
- * Reglas mínimas de una contraseña nueva. Devuelve el problema, o null si
- * sirve. Se piden 12 caracteres y no una sopa de símbolos: la longitud es lo
- * que de verdad cuesta romper, y una regla imposible acaba en un papelito
- * pegado a la pantalla.
+ * Las que prueba cualquiera antes de darse por vencido. La lista es corta a
+ * propósito: no pretende ser un diccionario, sino atrapar lo obvio, incluido
+ * lo obvio de ESTE consultorio.
  */
-export function problemaConLaPassword(password) {
+export const PASSWORDS_COMUNES = [
+  '123456', '1234567', '12345678', '123456789', '1234567890', '12345678910',
+  'password', 'password1', 'contrasena', 'contraseña', 'qwerty', 'qwertyuiop',
+  'abc123', 'iloveyou', 'admin', 'administrador', 'bienvenido', 'welcome',
+  'doctor', 'doctora', 'medico', 'consultorio', 'cemaustro', 'diabetes',
+  'ecuador', 'cuenca', 'asistente', 'letmein', 'monkey', 'dragon',
+];
+
+/**
+ * Reglas de una contraseña nueva. Devuelve el problema, o null si sirve.
+ *
+ * Se pide longitud y no una sopa de símbolos: obligar a mayúsculas, números y
+ * signos raros acaba en un papelito pegado a la pantalla, que es peor que una
+ * contraseña larga y memorable. Lo que sí se rechaza es lo que un desconocido
+ * probaría de primeras.
+ *
+ * Ojo: la pantalla repite estas mismas comprobaciones para ir marcando la
+ * lista mientras se escribe, pero la que manda es esta. Lo del navegador es
+ * comodidad; cualquiera puede saltárselo.
+ */
+export function problemaConLaPassword(password, { usuario = '', actual = null } = {}) {
   const texto = String(password ?? '');
-  if (texto.length < 12) return 'La contraseña necesita al menos 12 caracteres.';
+  const llano = texto.trim().toLowerCase();
+
+  if (texto.length < LARGO_MINIMO) {
+    return `La contraseña necesita al menos ${LARGO_MINIMO} caracteres.`;
+  }
   if (texto.length > 200) return 'La contraseña es demasiado larga.';
   if (!/[^\s]/.test(texto)) return 'La contraseña no puede ser solo espacios.';
+
+  const nombre = String(usuario ?? '').trim().toLowerCase();
+  if (nombre.length >= 3 && llano.includes(nombre)) {
+    return 'La contraseña no puede contener su nombre de usuario.';
+  }
+
+  if (PASSWORDS_COMUNES.includes(llano)) {
+    return 'Esa contraseña es de las más usadas del mundo: elija otra.';
+  }
+
+  if (actual !== null && texto === String(actual)) {
+    return 'La contraseña nueva tiene que ser distinta de la actual.';
+  }
+
   return null;
 }
 

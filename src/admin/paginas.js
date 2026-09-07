@@ -3,7 +3,7 @@
  * Reciben datos ya consultados y devuelven HTML; no tocan la base.
  */
 import { config } from '../config.js';
-import { esc, etiquetaNivel } from './vistas.js';
+import { esc, etiquetaNivel, requisitosDePassword, scriptDeRequisitos } from './vistas.js';
 import { fechaCorta, diaCorto } from '../utils/datetime.js';
 import { ETIQUETA_CONTEXTO, clasificar } from '../services/glucemias.js';
 import { CATALOGO } from '../services/ajustes.js';
@@ -602,6 +602,8 @@ export function cuenta(usuario) {
         <label for="repetida">Repita la contraseña nueva</label>
         <input type="password" id="repetida" name="repetida" autocomplete="new-password" required>
 
+        ${requisitosDePassword({ usuario: usuario.username, conRepetir: true, conActual: true })}
+
         <button type="submit">Cambiar la contraseña</button>
       </form>
       <p class="sub" style="font-size:13px; margin:14px 0 0">
@@ -619,7 +621,8 @@ export function cuenta(usuario) {
                placeholder="Dr. Juan Pérez" maxlength="80">
         <button type="submit" class="secundario">Guardar</button>
       </form>
-    </div>`;
+    </div>
+    ${scriptDeRequisitos()}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -709,7 +712,10 @@ export function usuarios(lista, yo) {
         </label>
         <input type="password" id="nueva-password" name="password" autocomplete="new-password" required>
 
+        ${requisitosDePassword()}
+
         <button type="submit">Crear</button>
       </form>
-    </div>`;
+    </div>
+    ${scriptDeRequisitos()}`;
 }

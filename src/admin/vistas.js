@@ -132,6 +132,21 @@ const ESTILOS = `
   .entrada button { width: 100%; margin-top: 20px; padding: 11px; }
   .entrada label:first-of-type { margin-top: 0; }
   .pie-entrada { color: var(--suave); font-size: 12.5px; text-align: center; margin-top: 18px; line-height: 1.5; }
+  /* --- Lista de requisitos de la contraseña --- */
+  .requisitos { list-style: none; margin: 10px 0 0; padding: 0; font-size: 13px; }
+  .requisitos li {
+    display: flex; gap: 8px; align-items: baseline;
+    padding: 3px 0; color: var(--suave);
+  }
+  .requisitos li::before {
+    content: "○"; font-size: 12px; width: 14px; flex: none; text-align: center;
+  }
+  .requisitos li.cumple { color: var(--acento); }
+  .requisitos li.cumple::before { content: "✓"; font-weight: 700; }
+  .requisitos li.falla { color: var(--urgente); }
+  .requisitos li.falla::before { content: "✕"; font-weight: 700; }
+  button[disabled] { opacity: .45; cursor: not-allowed; }
+  button[disabled]:hover { filter: none; }
 `;
 
 const SECCIONES = [
@@ -252,4 +267,107 @@ export function etiquetaNivel(nivel) {
 /** Tabla vacía con un mensaje decente en lugar de una tabla en blanco. */
 export function siVacio(filas, mensaje) {
   return filas.length === 0 ? `<p class="vacio">${esc(mensaje)}</p>` : null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Requisitos de la contraseña                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Lista de requisitos que se va marcando mientras se escribe.
+ *
+ * Se pinta con todos los puntos en gris: si el navegador no ejecuta el
+ * script, el doctor ve igualmente QUÉ hace falta, y el servidor sigue siendo
+ * quien decide. Por lo mismo el botón se manda habilitado y solo lo bloquea
+ * el script: nadie se queda sin poder enviar el formulario.
+ */
+export function requisitosDePassword({ usuario = '', conRepetir = false, conActual = false } = {}) {
+  const puntos = [
+    ['largo', 'Al menos 12 caracteres'],
+    ['usuario', 'No contiene su nombre de usuario'],
+    ['comun', 'No es una de las contraseñas más usadas'],
+  ];
+
+  if (conActual) puntos.push(['distinta', 'Es distinta de la actual']);
+  if (conRepetir) puntos.push(['coincide', 'Las dos escrituras coinciden']);
+
+  const filas = puntos.map(([id, texto]) => `<li data-req="${id}">${esc(texto)}</li>`).join('');
+
+  return `<ul class="requisitos" data-requisitos data-usuario="${esc(usuario)}">${filas}</ul>`;
+}
+
+/**
+ * Comprobación en el navegador. Repite a propósito las reglas de
+ * admin/auth.js: aquí sirven para guiar mientras se escribe, allá para
+ * decidir. Si algún día cambian las reglas, hay que tocar los dos sitios.
+ */
+export function scriptDeRequisitos() {
+  const comunes = JSON.stringify([
+    '123456', '1234567', '12345678', '123456789', '1234567890', '12345678910',
+    'password', 'password1', 'contrasena', 'contraseña', 'qwerty', 'qwertyuiop',
+    'abc123', 'iloveyou', 'admin', 'administrador', 'bienvenido', 'welcome',
+    'doctor', 'doctora', 'medico', 'consultorio', 'cemaustro', 'diabetes',
+    'ecuador', 'cuenca', 'asistente', 'letmein', 'monkey', 'dragon',
+  ]);
+
+  return `<script>
+(function () {
+  var COMUNES = ${comunes};
+
+  document.querySelectorAll('[data-requisitos]').forEach(function (lista) {
+    var form = lista.closest('form');
+    if (!form) return;
+
+    var nueva = form.querySelector('input[name="nueva"], input[name="password"]');
+    if (!nueva) return;
+
+    var repetida = form.querySelector('input[name="repetida"]');
+    var actual = form.querySelector('input[name="actual"]');
+    var campoUsuario = form.querySelector('input[name="usuario"]');
+    var boton = form.querySelector('button[type="submit"]');
+
+    function marcar(id, ok, tocado) {
+      var li = lista.querySelector('[data-req="' + id + '"]');
+      if (!li) return;
+      li.classList.toggle('cumple', ok);
+      li.classList.toggle('falla', !ok && tocado);
+    }
+
+    function revisar() {
+      var valor = nueva.value;
+      var llano = valor.trim().toLowerCase();
+      var tocado = valor.length > 0;
+
+      // El nombre de usuario sale del propio formulario cuando se está
+      // creando una cuenta, y del atributo cuando ya se sabe quién es.
+      var quien = (campoUsuario ? campoUsuario.value : lista.dataset.usuario || '').trim().toLowerCase();
+
+      var reglas = {
+        largo: valor.length >= 12,
+        usuario: !(quien.length >= 3 && llano.indexOf(quien) !== -1),
+        comun: COMUNES.indexOf(llano) === -1,
+      };
+
+      if (actual) reglas.distinta = tocado && valor !== actual.value;
+      if (repetida) reglas.coincide = tocado && valor === repetida.value;
+
+      // Con el campo vacío no se marca nada: enseñar visto bueno a quien no
+      // ha escrito todavía hace creer que ya cumplió.
+      var todo = true;
+      Object.keys(reglas).forEach(function (id) {
+        marcar(id, reglas[id] && tocado, tocado);
+        if (!reglas[id]) todo = false;
+      });
+
+      if (boton) boton.disabled = !todo;
+    }
+
+    [nueva, repetida, actual, campoUsuario].forEach(function (campo) {
+      if (campo) campo.addEventListener('input', revisar);
+    });
+
+    revisar();
+  });
+})();
+</script>`;
 }

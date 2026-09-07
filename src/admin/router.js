@@ -502,7 +502,7 @@ adminRouter.post('/cuenta', (req, res) => {
     return volver(res, '/admin/cuenta', { tipo: 'error', texto: 'Las dos contraseñas nuevas no coinciden.' });
   }
 
-  const problema = problemaConLaPassword(nueva);
+  const problema = problemaConLaPassword(nueva, { usuario: req.usuario.username, actual });
   if (problema) return volver(res, '/admin/cuenta', { tipo: 'error', texto: problema });
 
   db.cambiarPasswordPanel(req.usuario.id, resumirPassword(nueva));
@@ -594,7 +594,7 @@ adminRouter.post('/usuarios', (req, res) => {
     return volver(res, '/admin/usuarios', { tipo: 'error', texto: 'Ya existe un usuario con ese nombre.' });
   }
 
-  const problema = problemaConLaPassword(password);
+  const problema = problemaConLaPassword(password, { usuario });
   if (problema) return volver(res, '/admin/usuarios', { tipo: 'error', texto: problema });
 
   // Ante cualquier valor raro, el papel más limitado.
