@@ -560,6 +560,26 @@ export function cuenta(usuario) {
     <h1>Mi cuenta</h1>
     <p class="sub">Su usuario es <code>${esc(usuario.username)}</code>.</p>
 
+    <h2>Nombre de usuario</h2>
+    <div class="tarjeta">
+      <form method="post" action="/admin/cuenta/usuario">
+        <label for="nuevo">Con qué nombre entra al panel
+          <small>Entre 3 y 40 caracteres: letras sin tilde, números, punto, guion
+          o guion bajo. Es solo su identificador de entrada, no cambia lo que puede hacer.</small>
+        </label>
+        <input type="text" id="nuevo" name="nuevo" value="${esc(usuario.username)}"
+               autocapitalize="off" autocorrect="off" maxlength="40" required>
+
+        <label for="clave-usuario">Su contraseña actual
+          <small>Para confirmar que es usted quien lo cambia.</small>
+        </label>
+        <input type="password" id="clave-usuario" name="password" autocomplete="current-password" required>
+
+        <button type="submit">Cambiar el nombre de usuario</button>
+      </form>
+    </div>
+
+    <h2>Contraseña</h2>
     <div class="tarjeta">
       <form method="post" action="/admin/cuenta">
         <label for="actual">Contraseña actual</label>

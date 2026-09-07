@@ -513,6 +513,43 @@ adminRouter.post('/cuenta', (req, res) => {
   });
 });
 
+adminRouter.post('/cuenta/usuario', (req, res) => {
+  const nuevo = String(req.body.nuevo ?? '').trim().toLowerCase();
+
+  // Se pide la contraseña porque esto cambia con qué credencial se entra:
+  // una sesión robada no debería poder tocarlo.
+  if (!passwordCorrecta(String(req.body.password ?? ''), req.usuario.password_hash)) {
+    logger.warn(`Cambio de nombre de usuario rechazado: contraseña incorrecta ("${req.usuario.username}").`);
+    return volver(res, '/admin/cuenta', { tipo: 'error', texto: 'La contraseña no es correcta.' });
+  }
+
+  if (nuevo === req.usuario.username.toLowerCase()) {
+    return volver(res, '/admin/cuenta', { tipo: 'ok', texto: 'Ese ya es su nombre de usuario.' });
+  }
+
+  if (!/^[a-z0-9._-]{3,40}$/.test(nuevo)) {
+    return volver(res, '/admin/cuenta', {
+      tipo: 'error',
+      texto: 'El usuario admite entre 3 y 40 letras sin tilde, números, punto, guion o guion bajo.',
+    });
+  }
+
+  if (db.usuarioPanelPorNombre(nuevo)) {
+    return volver(res, '/admin/cuenta', { tipo: 'error', texto: 'Ya existe un usuario con ese nombre.' });
+  }
+
+  const anterior = req.usuario.username;
+  db.cambiarUsuarioPanel(req.usuario.id, nuevo);
+  logger.info(`Nombre de usuario del panel cambiado: "${anterior}" pasa a ser "${nuevo}".`);
+
+  // La sesión se firma con el id y la contraseña, no con el nombre, así que
+  // sigue valiendo: no hace falta volver a entrar.
+  return volver(res, '/admin/cuenta', {
+    tipo: 'ok',
+    texto: `Desde ahora entra como "${nuevo}".`,
+  });
+});
+
 adminRouter.post('/cuenta/nombre', (req, res) => {
   const nombre = String(req.body.nombre ?? '').trim().slice(0, 80);
   db.cambiarNombreUsuarioPanel(req.usuario.id, nombre || null);

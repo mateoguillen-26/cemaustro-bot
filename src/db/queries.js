@@ -602,3 +602,7 @@ export function registrarEntradaPanel(id) {
 export function cambiarNombreUsuarioPanel(id, nombre) {
   obtenerDB().prepare('UPDATE admin_users SET name = ? WHERE id = ?').run(nombre, id);
 }
+
+export function cambiarUsuarioPanel(id, usuario) {
+  obtenerDB().prepare('UPDATE admin_users SET username = ? WHERE id = ?').run(usuario, id);
+}
