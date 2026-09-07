@@ -114,6 +114,10 @@ const ESTILOS = `
   .grafico div.alta { background: var(--aviso); }
   .grafico div.baja { background: var(--urgente); }
   code { background: #eef0f3; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  input[type=file] {
+    width: 100%; padding: 9px 11px; border: 1px dashed var(--borde);
+    border-radius: 7px; font: inherit; background: #fff; cursor: pointer;
+  }
   input[type=password] {
     width: 100%; padding: 9px 11px; border: 1px solid var(--borde);
     border-radius: 7px; font: inherit; background: #fff;

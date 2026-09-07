@@ -408,7 +408,23 @@ export function conocimiento(documentos) {
       }
     </div>
 
-    <h2>Agregar un documento</h2>
+    <h2>Subir un archivo</h2>
+    <div class="tarjeta">
+      <form method="post" action="/admin/conocimiento/subir" enctype="multipart/form-data">
+        <label for="archivo">Archivo
+          <small>PDF, Word (.docx), .txt o .md. Hasta 15 MB.
+          Antes de guardarlo verá el texto que se leyó, para revisarlo.</small>
+        </label>
+        <input type="file" id="archivo" name="archivo" accept=".pdf,.docx,.txt,.md" required>
+        <button type="submit">Leer el archivo</button>
+      </form>
+      <p class="sub" style="font-size:13px; margin:14px 0 0">
+        Un PDF <b>escaneado</b> no lleva texto por dentro, solo una imagen de la página:
+        de esos no se puede leer nada y habrá que copiar el texto a mano.
+      </p>
+    </div>
+
+    <h2>O pegar el texto</h2>
     <div class="tarjeta">
       <form method="post" action="/admin/conocimiento">
         <div class="barra">
@@ -718,4 +734,43 @@ export function usuarios(lista, yo) {
       </form>
     </div>
     ${scriptDeRequisitos()}`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Revisar un documento recién leído de un archivo                     */
+/* ------------------------------------------------------------------ */
+
+export function revisarDocumento({ titulo, fuente, contenido }) {
+  const parrafos = contenido.split(/\n\s*\n/).filter(Boolean).length;
+  const palabras = contenido.split(/\s+/).filter(Boolean).length;
+
+  return `
+    <h1>Revisar antes de guardar</h1>
+    <p class="sub">
+      Esto es lo que se leyó de <b>${esc(fuente)}</b>: ${palabras.toLocaleString('es')} palabras
+      en ${parrafos} párrafo(s). Todavía no se ha guardado nada.
+    </p>
+
+    <div class="tarjeta">
+      <form method="post" action="/admin/conocimiento">
+        <label for="titulo">Título
+          <small>Con esto lo reconocerá después. Sea descriptivo: "Hipoglucemia: regla del 15", no "Guía 1".</small>
+        </label>
+        <input type="text" id="titulo" name="titulo" value="${esc(titulo)}" required maxlength="120">
+
+        <input type="hidden" name="fuente" value="${esc(fuente)}">
+
+        <label for="contenido">Texto
+          <small>Repase por encima y corrija lo que haya salido torcido. Deje una
+          línea en blanco entre temas: el texto se parte por párrafos, y si todo
+          va en un bloque los fragmentos salen mezclados.</small>
+        </label>
+        <textarea id="contenido" name="contenido" style="min-height:420px" required>${esc(contenido)}</textarea>
+
+        <div class="barra">
+          <button type="submit">Guardar e indexar</button>
+          <a href="/admin/conocimiento" style="padding-bottom:10px">Descartar</a>
+        </div>
+      </form>
+    </div>`;
 }

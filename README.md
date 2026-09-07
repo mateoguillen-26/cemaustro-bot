@@ -123,8 +123,13 @@ un código de vinculación la primera vez.
 
 ### 4. Cargar la base de conocimiento
 
-Pegue el texto en *Panel → Conocimiento*, o deje archivos `.md` / `.txt` en
-`docs/` y corra:
+En *Panel → Conocimiento* puede **subir un archivo** (PDF, Word `.docx`, `.txt`
+o `.md`, hasta 15 MB) o pegar el texto directamente. Al subir un archivo se le
+muestra el texto que se leyó **antes de guardarlo**, para que lo revise: un PDF
+a dos columnas se entrelaza y uno escaneado no tiene texto que sacar, y un
+documento mal extraído no falla, solo empeora las respuestas en silencio.
+
+También puede dejar archivos `.md` / `.txt` en `docs/` y correr:
 
 ```bash
 npm run importar-docs

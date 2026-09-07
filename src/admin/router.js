@@ -7,6 +7,7 @@
  * en la respuesta del POST para que no quede en el historial del navegador.
  */
 import express from 'express';
+import Busboy from 'busboy';
 import { advertenciasDeConfiguracion } from '../config.js';
 import { logger, incidenciasRecientes } from '../utils/logger.js';
 import {
@@ -30,6 +31,12 @@ import * as paginas from './paginas.js';
 import * as db from '../db/queries.js';
 import * as auth from '../services/auth.js';
 import * as conocimiento from '../services/conocimiento.js';
+import {
+  extraerTexto,
+  formatoDe,
+  MAX_BYTES,
+  tituloDesdeNombre,
+} from '../services/documentos.js';
 import { CATALOGO, ajuste, estaPersonalizado, guardarAjuste, restaurarAjuste } from '../services/ajustes.js';
 import { esCedulaValida, normalizarCedula } from '../utils/cedula.js';
 
@@ -677,4 +684,88 @@ adminRouter.post('/usuarios/:id/rol', (req, res) => {
     tipo: 'ok',
     texto: `"${objetivo.username}" ahora es ${rol === ROLES.ADMINISTRADOR ? 'administrador' : 'doctor'}.`,
   });
+});
+
+/* ------------------------------------------------------------------ */
+/* Subir un archivo al conocimiento                                    */
+/*                                                                     */
+/* No se guarda nada aquí: se extrae el texto y se le enseña al doctor  */
+/* para que lo revise. Guardar lo hace después el mismo formulario de   */
+/* siempre, así que la extracción no abre un segundo camino a la base.  */
+/* ------------------------------------------------------------------ */
+
+adminRouter.post('/conocimiento/subir', (req, res) => {
+  let terminado = false;
+
+  const fallar = (texto) => {
+    if (terminado) return;
+    terminado = true;
+    volver(res, '/admin/conocimiento', { tipo: 'error', texto });
+  };
+
+  let bus;
+  try {
+    bus = Busboy({ headers: req.headers, limits: { files: 1, fileSize: MAX_BYTES } });
+  } catch {
+    return fallar('No se recibió ningún archivo.');
+  }
+
+  let nombre = '';
+  let pedazos = [];
+  let bytes = 0;
+  let demasiadoGrande = false;
+
+  bus.on('file', (_campo, flujo, info) => {
+    nombre = info.filename ?? '';
+
+    if (!formatoDe(nombre)) {
+      flujo.resume(); // hay que consumir el flujo aunque no sirva
+      return;
+    }
+
+    flujo.on('data', (pedazo) => {
+      bytes += pedazo.length;
+      pedazos.push(pedazo);
+    });
+
+    flujo.on('limit', () => {
+      demasiadoGrande = true;
+      pedazos = [];
+    });
+  });
+
+  bus.on('error', () => fallar('No se pudo recibir el archivo.'));
+
+  bus.on('close', async () => {
+    if (terminado) return;
+
+    if (demasiadoGrande) {
+      return fallar(`El archivo pasa de ${Math.round(MAX_BYTES / 1024 / 1024)} MB.`);
+    }
+    if (!nombre) return fallar('No se eligió ningún archivo.');
+    if (!formatoDe(nombre)) {
+      return fallar('Solo se pueden subir archivos PDF, Word (.docx), .txt o .md.');
+    }
+    if (bytes === 0) return fallar('El archivo llegó vacío.');
+
+    const resultado = await extraerTexto({ buffer: Buffer.concat(pedazos), nombre });
+    if (!resultado.ok) return fallar(resultado.error);
+
+    terminado = true;
+    return res.type('html').send(
+      pagina({
+        titulo: 'Revisar documento',
+        activo: '/admin/conocimiento',
+        usuario: req.usuario,
+        aviso: resultado.aviso ? { tipo: 'ok', texto: resultado.aviso } : null,
+        contenido: paginas.revisarDocumento({
+          titulo: tituloDesdeNombre(nombre),
+          fuente: nombre,
+          contenido: resultado.texto,
+        }),
+      }),
+    );
+  });
+
+  return req.pipe(bus);
 });
