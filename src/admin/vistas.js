@@ -114,6 +114,24 @@ const ESTILOS = `
   .grafico div.alta { background: var(--aviso); }
   .grafico div.baja { background: var(--urgente); }
   code { background: #eef0f3; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  input[type=password] {
+    width: 100%; padding: 9px 11px; border: 1px solid var(--borde);
+    border-radius: 7px; font: inherit; background: #fff;
+  }
+  header .fila { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .sesion { display: flex; align-items: center; gap: 10px; padding: 14px 0 0; font-size: 13px; }
+  .sesion .quien { color: var(--suave); }
+  .sesion .quien b { color: var(--texto); font-weight: 600; }
+  .sesion form { margin: 0; }
+  .sesion button { margin: 0; }
+  /* --- Pantalla de entrada --- */
+  .entrada { max-width: 380px; margin: 0 auto; padding: 8vh 24px 24px; }
+  .entrada .marca-grande { font-size: 21px; font-weight: 700; margin-bottom: 4px; }
+  .entrada .marca-grande small { display: block; font-weight: 400; color: var(--suave); font-size: 13px; margin-top: 2px; }
+  .entrada .tarjeta { margin-top: 20px; }
+  .entrada button { width: 100%; margin-top: 20px; padding: 11px; }
+  .entrada label:first-of-type { margin-top: 0; }
+  .pie-entrada { color: var(--suave); font-size: 12.5px; text-align: center; margin-top: 18px; line-height: 1.5; }
 `;
 
 const SECCIONES = [
@@ -122,11 +140,12 @@ const SECCIONES = [
   { ruta: '/admin/alertas', etiqueta: 'Alertas' },
   { ruta: '/admin/conocimiento', etiqueta: 'Conocimiento' },
   { ruta: '/admin/configuracion', etiqueta: 'Configuración' },
+  { ruta: '/admin/usuarios', etiqueta: 'Usuarios' },
   { ruta: '/admin/seguridad', etiqueta: 'Seguridad' },
 ];
 
 /** Envuelve el contenido en la plantilla del panel. */
-export function pagina({ titulo, activo, contenido, aviso = null }) {
+export function pagina({ titulo, activo, contenido, aviso = null, usuario = null }) {
   const menu = SECCIONES.map(
     (s) =>
       `<a href="${s.ruta}" class="${s.ruta === activo ? 'activo' : ''}">${esc(s.etiqueta)}</a>`,
@@ -134,6 +153,16 @@ export function pagina({ titulo, activo, contenido, aviso = null }) {
 
   const banda = aviso
     ? `<div class="aviso aviso-${aviso.tipo === 'error' ? 'error' : 'ok'}">${esc(aviso.texto)}</div>`
+    : '';
+
+  const sesion = usuario
+    ? `<div class="sesion">
+         <span class="quien"><b>${esc(usuario.name || usuario.username)}</b></span>
+         <a href="/admin/cuenta">Mi cuenta</a>
+         <form method="post" action="/admin/salir">
+           <button class="secundario chico" type="submit">Salir</button>
+         </form>
+       </div>`
     : '';
 
   return `<!doctype html>
@@ -147,10 +176,61 @@ export function pagina({ titulo, activo, contenido, aviso = null }) {
 </head>
 <body>
   <header>
-    <div class="marca">${esc(config.clinica.nombre)}<small>asistente de diabetes</small></div>
-    <nav>${menu}</nav>
+    <div class="fila">
+      <div>
+        <div class="marca">${esc(config.clinica.nombre)}<small>asistente de diabetes</small></div>
+        <nav>${menu}</nav>
+      </div>
+      ${sesion}
+    </div>
   </header>
   <main>${banda}${contenido}</main>
+</body>
+</html>`;
+}
+
+/**
+ * Pantalla de entrada. Va aparte de `pagina()` a propósito: sin menú ni
+ * cabecera, porque quien la ve todavía no ha demostrado quién es y no tiene
+ * por qué ver siquiera qué secciones existen.
+ */
+export function paginaEntrar({ aviso = null, usuario = '' } = {}) {
+  const banda = aviso
+    ? `<div class="aviso aviso-${aviso.tipo === 'error' ? 'error' : 'ok'}">${esc(aviso.texto)}</div>`
+    : '';
+
+  return `<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Entrar · ${esc(config.clinica.nombre)}</title>
+  <style>${ESTILOS}</style>
+</head>
+<body>
+  <div class="entrada">
+    <div class="marca-grande">
+      ${esc(config.clinica.nombre)}
+      <small>panel del asistente de diabetes</small>
+    </div>
+    ${banda}
+    <form method="post" action="/admin/entrar" class="tarjeta">
+      <label for="usuario">Usuario</label>
+      <input type="text" id="usuario" name="usuario" value="${esc(usuario)}"
+             autocomplete="username" autocapitalize="off" autocorrect="off" required autofocus>
+
+      <label for="password">Contraseña</label>
+      <input type="password" id="password" name="password"
+             autocomplete="current-password" required>
+
+      <button type="submit">Entrar</button>
+    </form>
+    <p class="pie-entrada">
+      Esta página muestra datos de salud de pacientes.<br>
+      Cierre la sesión si deja el computador solo.
+    </p>
+  </div>
 </body>
 </html>`;
 }

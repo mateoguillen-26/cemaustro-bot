@@ -550,3 +550,55 @@ export function metricas() {
     fragmentos: db.prepare('SELECT COUNT(*) AS n FROM chunks').get().n,
   };
 }
+
+/* ================================================================== */
+/* Usuarios del panel                                                  */
+/* ================================================================== */
+
+export function contarUsuariosPanel() {
+  return obtenerDB().prepare('SELECT COUNT(*) AS n FROM admin_users WHERE active = 1').get().n;
+}
+
+/** Busca por nombre de usuario. Devuelve también los inactivos: quien llama decide. */
+export function usuarioPanelPorNombre(usuario) {
+  return (
+    obtenerDB()
+      .prepare('SELECT * FROM admin_users WHERE username = ?')
+      .get(String(usuario ?? '').trim()) ?? null
+  );
+}
+
+export function usuarioPanelPorId(id) {
+  return obtenerDB().prepare('SELECT * FROM admin_users WHERE id = ?').get(id) ?? null;
+}
+
+export function listarUsuariosPanel() {
+  return obtenerDB()
+    .prepare('SELECT * FROM admin_users ORDER BY active DESC, username')
+    .all();
+}
+
+export function crearUsuarioPanel({ usuario, hash, nombre = null }) {
+  const info = obtenerDB()
+    .prepare('INSERT INTO admin_users (username, password_hash, name) VALUES (?, ?, ?)')
+    .run(String(usuario).trim(), hash, nombre);
+  return usuarioPanelPorId(info.lastInsertRowid);
+}
+
+export function cambiarPasswordPanel(id, hash) {
+  obtenerDB().prepare('UPDATE admin_users SET password_hash = ? WHERE id = ?').run(hash, id);
+}
+
+export function activarUsuarioPanel(id, activo) {
+  obtenerDB().prepare('UPDATE admin_users SET active = ? WHERE id = ?').run(activo ? 1 : 0, id);
+}
+
+export function registrarEntradaPanel(id) {
+  obtenerDB()
+    .prepare("UPDATE admin_users SET last_login_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
+    .run(id);
+}
+
+export function cambiarNombreUsuarioPanel(id, nombre) {
+  obtenerDB().prepare('UPDATE admin_users SET name = ? WHERE id = ?').run(nombre, id);
+}

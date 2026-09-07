@@ -1,16 +1,28 @@
 /**
  * Rutas del panel de administración.
  *
- * Todo cuelga de /admin y pasa por Basic Auth + comprobación de origen.
- * Los avisos ("guardado", "no se pudo") viajan en la URL como ?ok= / ?error=,
- * salvo el código de vinculación: ese se pinta directamente en la respuesta
- * del POST para que no quede en el historial del navegador.
+ * Todo cuelga de /admin y exige sesión iniciada, salvo la propia pantalla de
+ * entrada. Los avisos ("guardado", "no se pudo") viajan en la URL como
+ * ?ok= / ?error=, salvo el código de vinculación: ese se pinta directamente
+ * en la respuesta del POST para que no quede en el historial del navegador.
  */
 import express from 'express';
 import { advertenciasDeConfiguracion } from '../config.js';
 import { logger, incidenciasRecientes } from '../utils/logger.js';
-import { requiereAuth, mismoOrigen } from './auth.js';
-import { pagina } from './vistas.js';
+import {
+  abrirSesion,
+  anotarFallo,
+  cerrarSesion,
+  estaBloqueado,
+  minutosQueFaltan,
+  mismoOrigen,
+  olvidarFallos,
+  passwordCorrecta,
+  problemaConLaPassword,
+  requiereSesion,
+  resumirPassword,
+} from './auth.js';
+import { pagina, paginaEntrar } from './vistas.js';
 import * as paginas from './paginas.js';
 import * as db from '../db/queries.js';
 import * as auth from '../services/auth.js';
@@ -21,7 +33,6 @@ import { esCedulaValida, normalizarCedula } from '../utils/cedula.js';
 export const adminRouter = express.Router();
 
 adminRouter.use(express.urlencoded({ extended: false, limit: '2mb' }));
-adminRouter.use(requiereAuth);
 adminRouter.use(mismoOrigen);
 
 /** Lee el aviso que viene en la URL tras un redirect. */
@@ -36,6 +47,67 @@ function volver(res, ruta, aviso) {
   const parametros = aviso ? `?${aviso.tipo === 'error' ? 'error' : 'ok'}=${encodeURIComponent(aviso.texto)}` : '';
   res.redirect(`${ruta}${parametros}`);
 }
+
+/* ------------------------------------------------------------------ */
+/* Entrar y salir                                                      */
+/*                                                                     */
+/* Van antes del guardia de sesión: son las únicas rutas del panel a    */
+/* las que se llega sin haber entrado.                                 */
+/* ------------------------------------------------------------------ */
+
+adminRouter.get('/entrar', (req, res) => {
+  res.type('html').send(paginaEntrar({ aviso: avisoDe(req) }));
+});
+
+adminRouter.post('/entrar', (req, res) => {
+  const ip = req.ip;
+
+  if (estaBloqueado(ip)) {
+    logger.warn(`Entrada al panel bloqueada por intentos fallidos desde ${ip}.`);
+    return res.status(429).type('html').send(
+      paginaEntrar({
+        aviso: {
+          tipo: 'error',
+          texto: `Demasiados intentos fallidos. Espere ${minutosQueFaltan(ip)} minuto(s).`,
+        },
+      }),
+    );
+  }
+
+  const nombreUsuario = String(req.body.usuario ?? '').trim();
+  const usuario = db.usuarioPanelPorNombre(nombreUsuario);
+  const correcta =
+    usuario?.active && passwordCorrecta(String(req.body.password ?? ''), usuario.password_hash);
+
+  // El mismo mensaje tanto si el usuario no existe como si la contraseña está
+  // mal: decir cuál de las dos falló le regala media respuesta a quien prueba.
+  if (!correcta) {
+    anotarFallo(ip);
+    logger.warn(`Intento fallido de entrada al panel desde ${ip}.`);
+    return res.status(401).type('html').send(
+      paginaEntrar({
+        usuario: nombreUsuario,
+        aviso: { tipo: 'error', texto: 'Usuario o contraseña incorrectos.' },
+      }),
+    );
+  }
+
+  olvidarFallos(ip);
+  abrirSesion(res, req, usuario);
+  logger.info(`Entrada al panel: "${usuario.username}".`);
+  return res.redirect(303, '/admin');
+});
+
+adminRouter.post('/salir', (req, res) => {
+  cerrarSesion(res);
+  res.redirect(303, '/admin/entrar');
+});
+
+/* ------------------------------------------------------------------ */
+/* A partir de aquí hace falta haber entrado                           */
+/* ------------------------------------------------------------------ */
+
+adminRouter.use(requiereSesion);
 
 /** Normaliza un teléfono escrito a mano: solo dígitos, sin '+' ni espacios. */
 function normalizarTelefono(valor) {
@@ -52,6 +124,7 @@ adminRouter.get('/', (req, res) => {
       titulo: 'Resumen',
       activo: '/admin',
       aviso: avisoDe(req),
+      usuario: req.usuario,
       contenido: paginas.resumen(db.metricas(), db.alertas({ soloAbiertas: true, limite: 10 })),
     }),
   );
@@ -68,6 +141,7 @@ adminRouter.get('/pacientes', (req, res) => {
       titulo: 'Pacientes',
       activo: '/admin/pacientes',
       aviso: avisoDe(req),
+      usuario: req.usuario,
       contenido: paginas.pacientes(db.listarPacientes({ busqueda }), busqueda),
     }),
   );
@@ -152,7 +226,7 @@ adminRouter.get('/pacientes/:id', (req, res) => {
   if (!contenido) return res.status(404).send('Paciente no encontrado.');
 
   res.type('html').send(
-    pagina({ titulo: 'Paciente', activo: '/admin/pacientes', aviso: avisoDe(req), contenido }),
+    pagina({ titulo: 'Paciente', activo: '/admin/pacientes', aviso: avisoDe(req), contenido, usuario: req.usuario }),
   );
 });
 
@@ -208,6 +282,7 @@ adminRouter.post('/pacientes/:id/codigo', (req, res) => {
       titulo: 'Paciente',
       activo: '/admin/pacientes',
       aviso: { tipo: 'ok', texto: 'Código generado. Anótelo ahora: no se vuelve a mostrar.' },
+      usuario: req.usuario,
       contenido: fichaDe(id, { codigo }),
     }),
   );
@@ -237,6 +312,7 @@ adminRouter.get('/alertas', (req, res) => {
       titulo: 'Alertas',
       activo: '/admin/alertas',
       aviso: avisoDe(req),
+      usuario: req.usuario,
       contenido: paginas.listaAlertas(db.alertas({ soloAbiertas }), soloAbiertas),
     }),
   );
@@ -264,6 +340,7 @@ adminRouter.get('/conocimiento', (req, res) => {
       titulo: 'Conocimiento',
       activo: '/admin/conocimiento',
       aviso: avisoDe(req),
+      usuario: req.usuario,
       contenido: paginas.conocimiento(db.listarDocumentos()),
     }),
   );
@@ -339,6 +416,7 @@ adminRouter.get('/configuracion', (req, res) => {
       titulo: 'Configuración',
       activo: '/admin/configuracion',
       aviso: avisoDe(req),
+      usuario: req.usuario,
       contenido: paginas.configuracion(valoresDeConfiguracion()),
     }),
   );
@@ -372,11 +450,145 @@ adminRouter.get('/seguridad', (req, res) => {
       titulo: 'Seguridad',
       activo: '/admin/seguridad',
       aviso: avisoDe(req),
+      usuario: req.usuario,
       contenido: paginas.seguridad(
         db.ultimosIntentos(60),
         incidenciasRecientes(30),
-        advertenciasDeConfiguracion(),
+        // El aviso sobre ADMIN_USER/ADMIN_PASSWORD solo sirve mientras no haya
+        // ningún usuario: creado el primero, esas variables ya no pintan nada
+        // y dejarlo puesto haría que el doctor persiguiera un problema que no
+        // existe. Al revés, quedarse sin usuarios sí es grave.
+        db.contarUsuariosPanel() > 0
+          ? advertenciasDeConfiguracion().filter((a) => !a.startsWith('ADMIN_USER'))
+          : [...advertenciasDeConfiguracion(), 'No hay ningún usuario con acceso al panel.'],
       ),
     }),
   );
+});
+
+/* ------------------------------------------------------------------ */
+/* Mi cuenta                                                           */
+/* ------------------------------------------------------------------ */
+
+adminRouter.get('/cuenta', (req, res) => {
+  res.type('html').send(
+    pagina({
+      titulo: 'Mi cuenta',
+      activo: '/admin/cuenta',
+      aviso: avisoDe(req),
+      usuario: req.usuario,
+      contenido: paginas.cuenta(req.usuario),
+    }),
+  );
+});
+
+adminRouter.post('/cuenta', (req, res) => {
+  const actual = String(req.body.actual ?? '');
+  const nueva = String(req.body.nueva ?? '');
+  const repetida = String(req.body.repetida ?? '');
+
+  if (!passwordCorrecta(actual, req.usuario.password_hash)) {
+    logger.warn(`Cambio de contraseña rechazado: la actual no coincide ("${req.usuario.username}").`);
+    return volver(res, '/admin/cuenta', { tipo: 'error', texto: 'La contraseña actual no es correcta.' });
+  }
+
+  if (nueva !== repetida) {
+    return volver(res, '/admin/cuenta', { tipo: 'error', texto: 'Las dos contraseñas nuevas no coinciden.' });
+  }
+
+  const problema = problemaConLaPassword(nueva);
+  if (problema) return volver(res, '/admin/cuenta', { tipo: 'error', texto: problema });
+
+  db.cambiarPasswordPanel(req.usuario.id, resumirPassword(nueva));
+  logger.info(`Contraseña cambiada por "${req.usuario.username}".`);
+
+  // La firma de la sesión incluye el resumen de la contraseña, así que la
+  // cookie actual acaba de quedar invalidada. Se abre una nueva para no echar
+  // fuera a quien acaba de cambiarla, y las de otros navegadores caen solas.
+  abrirSesion(res, req, db.usuarioPanelPorId(req.usuario.id));
+
+  return volver(res, '/admin/cuenta', {
+    tipo: 'ok',
+    texto: 'Contraseña cambiada. Las sesiones abiertas en otros navegadores se cerraron.',
+  });
+});
+
+adminRouter.post('/cuenta/nombre', (req, res) => {
+  const nombre = String(req.body.nombre ?? '').trim().slice(0, 80);
+  db.cambiarNombreUsuarioPanel(req.usuario.id, nombre || null);
+  return volver(res, '/admin/cuenta', { tipo: 'ok', texto: 'Nombre guardado.' });
+});
+
+/* ------------------------------------------------------------------ */
+/* Usuarios                                                            */
+/* ------------------------------------------------------------------ */
+
+adminRouter.get('/usuarios', (req, res) => {
+  res.type('html').send(
+    pagina({
+      titulo: 'Usuarios',
+      activo: '/admin/usuarios',
+      aviso: avisoDe(req),
+      usuario: req.usuario,
+      contenido: paginas.usuarios(db.listarUsuariosPanel(), req.usuario),
+    }),
+  );
+});
+
+adminRouter.post('/usuarios', (req, res) => {
+  const usuario = String(req.body.usuario ?? '').trim().toLowerCase();
+  const nombre = String(req.body.nombre ?? '').trim().slice(0, 80) || null;
+  const password = String(req.body.password ?? '');
+
+  if (!/^[a-z0-9._-]{3,40}$/.test(usuario)) {
+    return volver(res, '/admin/usuarios', {
+      tipo: 'error',
+      texto: 'El usuario admite entre 3 y 40 letras, números, punto, guion o guion bajo.',
+    });
+  }
+
+  if (db.usuarioPanelPorNombre(usuario)) {
+    return volver(res, '/admin/usuarios', { tipo: 'error', texto: 'Ya existe un usuario con ese nombre.' });
+  }
+
+  const problema = problemaConLaPassword(password);
+  if (problema) return volver(res, '/admin/usuarios', { tipo: 'error', texto: problema });
+
+  db.crearUsuarioPanel({ usuario, hash: resumirPassword(password), nombre });
+  logger.info(`Usuario del panel creado: "${usuario}" (por "${req.usuario.username}").`);
+
+  return volver(res, '/admin/usuarios', {
+    tipo: 'ok',
+    texto: `Usuario "${usuario}" creado. Entréguele la contraseña en persona y pídale que la cambie.`,
+  });
+});
+
+adminRouter.post('/usuarios/:id/acceso', (req, res) => {
+  const id = Number(req.params.id);
+
+  // Quitarse el acceso a uno mismo es la forma más rápida de quedarse fuera.
+  if (id === req.usuario.id) {
+    return volver(res, '/admin/usuarios', { tipo: 'error', texto: 'No puede quitarse el acceso a usted mismo.' });
+  }
+
+  const objetivo = db.usuarioPanelPorId(id);
+  if (!objetivo) return volver(res, '/admin/usuarios', { tipo: 'error', texto: 'Ese usuario no existe.' });
+
+  const activar = req.body.activo === '1';
+
+  // Dejar el panel sin ningún usuario activo lo apagaría para todos.
+  if (!activar && db.contarUsuariosPanel() <= 1) {
+    return volver(res, '/admin/usuarios', {
+      tipo: 'error',
+      texto: 'Es el último usuario con acceso: cree otro antes de quitárselo.',
+    });
+  }
+
+  db.activarUsuarioPanel(id, activar);
+  logger.info(`Acceso al panel ${activar ? 'devuelto a' : 'retirado a'} "${objetivo.username}".`);
+
+  return volver(res, '/admin/usuarios', {
+    tipo: 'ok',
+    texto: activar ? `"${objetivo.username}" vuelve a tener acceso.` : `"${objetivo.username}" ya no puede entrar.`,
+  });
 });

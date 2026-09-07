@@ -189,6 +189,29 @@ const MIGRACIONES = [
       );
     `,
   },
+  {
+    version: 6,
+    nombre: 'usuarios del panel',
+    sql: `
+      -- Quién puede entrar al panel. Antes había un solo usuario fijo en el
+      -- .env; ahora cada persona tiene el suyo y puede cambiar su contraseña
+      -- sin tocar el servidor. El primero se crea al arrancar a partir de
+      -- ADMIN_USER/ADMIN_PASSWORD, para no dejar a nadie fuera al actualizar.
+      --
+      -- La contraseña NUNCA se guarda: se guarda su resumen con scrypt, que
+      -- es lento a propósito para que probar contraseñas a lo bruto no salga
+      -- a cuenta.
+      CREATE TABLE IF NOT EXISTS admin_users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+          password_hash TEXT NOT NULL,
+          name TEXT,
+          active INTEGER NOT NULL DEFAULT 1,
+          created_at DATETIME DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+          last_login_at DATETIME
+      );
+    `,
+  },
 ];
 
 /** Aplica las migraciones que falten. Devuelve la versión final del esquema. */

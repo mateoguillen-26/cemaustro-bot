@@ -8,6 +8,7 @@ import { obtenerDB, cerrarDB } from './db/database.js';
 import { ejecutarMigraciones } from './db/migrations.js';
 import { router as webhookRouter } from './webhook/whatsapp.js';
 import { adminRouter } from './admin/router.js';
+import { asegurarUsuarioInicial } from './admin/auth.js';
 
 const app = express();
 
@@ -74,6 +75,10 @@ function arrancar() {
 
   obtenerDB();
   ejecutarMigraciones();
+
+  // Crea el primer usuario del panel a partir del .env si aún no hay ninguno.
+  // Va después de las migraciones porque necesita la tabla ya creada.
+  asegurarUsuarioInicial();
 
   const servidor = app.listen(config.puerto, () => {
     logger.info(`Servidor escuchando en el puerto ${config.puerto} (${config.entorno}).`);

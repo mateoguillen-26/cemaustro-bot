@@ -550,3 +550,115 @@ export function seguridad(intentos, incidencias, advertencias) {
       </p>
     </div>`;
 }
+
+/* ------------------------------------------------------------------ */
+/* Mi cuenta                                                           */
+/* ------------------------------------------------------------------ */
+
+export function cuenta(usuario) {
+  return `
+    <h1>Mi cuenta</h1>
+    <p class="sub">Su usuario es <code>${esc(usuario.username)}</code>.</p>
+
+    <div class="tarjeta">
+      <form method="post" action="/admin/cuenta">
+        <label for="actual">Contraseña actual</label>
+        <input type="password" id="actual" name="actual" autocomplete="current-password" required>
+
+        <label for="nueva">Contraseña nueva
+          <small>Al menos 12 caracteres. Una frase que solo usted recuerde es más
+          segura y más fácil que una sopa de símbolos.</small>
+        </label>
+        <input type="password" id="nueva" name="nueva" autocomplete="new-password" required>
+
+        <label for="repetida">Repita la contraseña nueva</label>
+        <input type="password" id="repetida" name="repetida" autocomplete="new-password" required>
+
+        <button type="submit">Cambiar la contraseña</button>
+      </form>
+      <p class="sub" style="font-size:13px; margin:14px 0 0">
+        Al cambiarla se cierran las sesiones abiertas en otros navegadores.
+      </p>
+    </div>
+
+    <h2>Su nombre</h2>
+    <div class="tarjeta">
+      <form method="post" action="/admin/cuenta/nombre">
+        <label for="nombre">Cómo aparece en el panel
+          <small>Solo se usa para saludarle arriba a la derecha.</small>
+        </label>
+        <input type="text" id="nombre" name="nombre" value="${esc(usuario.name ?? '')}"
+               placeholder="Dr. Juan Pérez" maxlength="80">
+        <button type="submit" class="secundario">Guardar</button>
+      </form>
+    </div>`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Usuarios del panel                                                  */
+/* ------------------------------------------------------------------ */
+
+export function usuarios(lista, yo) {
+  const filas = lista
+    .map((u) => {
+      const esYo = u.id === yo.id;
+      const estado = u.active
+        ? '<span class="etiqueta et-ok">Activo</span>'
+        : '<span class="etiqueta et-gris">Sin acceso</span>';
+
+      // Nadie puede quitarse el acceso a sí mismo: sería la forma más rápida
+      // de quedarse fuera del panel sin manera de volver a entrar.
+      const accion = esYo
+        ? '<span class="sub" style="font-size:13px">Es usted</span>'
+        : `<form method="post" action="/admin/usuarios/${u.id}/acceso" class="enlinea">
+             <input type="hidden" name="activo" value="${u.active ? '0' : '1'}">
+             <button type="submit" class="chico ${u.active ? 'peligro' : 'secundario'}">
+               ${u.active ? 'Quitar acceso' : 'Devolver acceso'}
+             </button>
+           </form>`;
+
+      return `<tr>
+        <td><b>${esc(u.username)}</b></td>
+        <td>${esc(u.name ?? '—')}</td>
+        <td>${estado}</td>
+        <td>${esc(u.last_login_at ? fechaCorta(u.last_login_at) : 'Nunca ha entrado')}</td>
+        <td>${accion}</td>
+      </tr>`;
+    })
+    .join('');
+
+  return `
+    <h1>Usuarios</h1>
+    <p class="sub">Quién puede entrar al panel. Todos ven lo mismo y pueden hacer lo mismo.</p>
+
+    <div class="tarjeta">
+      <table>
+        <thead>
+          <tr><th>Usuario</th><th>Nombre</th><th>Estado</th><th>Última entrada</th><th></th></tr>
+        </thead>
+        <tbody>${filas}</tbody>
+      </table>
+    </div>
+
+    <h2>Crear un usuario</h2>
+    <div class="tarjeta">
+      <form method="post" action="/admin/usuarios">
+        <label for="nuevo-usuario">Usuario
+          <small>Sin espacios ni tildes. Por ejemplo: <code>dr.perez</code></small>
+        </label>
+        <input type="text" id="nuevo-usuario" name="usuario" autocapitalize="off"
+               autocorrect="off" maxlength="40" required>
+
+        <label for="nuevo-nombre">Nombre <small>Opcional, para reconocerlo de un vistazo.</small></label>
+        <input type="text" id="nuevo-nombre" name="nombre" placeholder="Dr. Juan Pérez" maxlength="80">
+
+        <label for="nueva-password">Contraseña provisional
+          <small>Al menos 12 caracteres. Entréguesela en persona y pídale que la
+          cambie desde "Mi cuenta" en cuanto entre.</small>
+        </label>
+        <input type="password" id="nueva-password" name="password" autocomplete="new-password" required>
+
+        <button type="submit">Crear</button>
+      </form>
+    </div>`;
+}

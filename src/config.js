@@ -225,8 +225,14 @@ export function advertenciasDeConfiguracion() {
   if (config.auth.pepper === 'cambie-esta-sal-en-produccion') {
     avisos.push('AUTH_PEPPER sigue con el valor de ejemplo. Póngale una cadena larga y única.');
   }
+  // Ojo: esto solo mira el .env, que es de donde sale el PRIMER usuario del
+  // panel. Una vez creado, los usuarios viven en la base y el aviso deja de
+  // tener sentido, así que el panel lo descarta cuando ya hay alguno.
   if (!config.admin.activo) {
-    avisos.push('ADMIN_USER/ADMIN_PASSWORD vacíos: el panel /admin está desactivado.');
+    avisos.push(
+      'ADMIN_USER/ADMIN_PASSWORD vacíos: si todavía no ha creado ningún usuario, ' +
+        'el panel /admin está desactivado.',
+    );
   }
   if (!config.doctor.telefono) {
     avisos.push('DOCTOR_TELEFONO vacío: las alertas se guardan pero no se le avisan por WhatsApp.');
