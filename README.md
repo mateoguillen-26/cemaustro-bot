@@ -159,6 +159,19 @@ El panel va protegido con usuario y contraseña. **Si no los configura, no se
 sirve**: muestra cédulas y datos de salud, y no puede quedar abierto por
 descuido.
 
+Hay dos papeles: **administrador** (ve todo) y **doctor** (pacientes, alertas y
+conocimiento). Los usuarios se crean desde **Usuarios**, y desde ahí mismo un
+administrador puede restablecer la contraseña de cualquier otro. Si el único
+administrador olvida la suya, se restablece desde el servidor:
+
+```bash
+npm run restablecer-password -- jefe
+```
+
+Sin más argumentos inventa una contraseña provisional y la muestra una sola
+vez; también puede indicarla como segundo argumento. Las sesiones abiertas de
+ese usuario se cierran solas.
+
 ---
 
 ## Las alertas
@@ -206,7 +219,7 @@ src/
 ├── webhook/whatsapp.js      ★ Recepción y orquestación
 ├── admin/                   Panel del doctor
 ├── utils/                   Fechas, cédula ecuatoriana, registro
-└── scripts/                 Importadores de docs y pacientes
+└── scripts/                 Importadores de docs y pacientes, restablecer contraseña
 ```
 
 ---

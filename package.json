@@ -12,7 +12,8 @@
     "dev": "node --watch src/index.js",
     "migrate": "node src/db/migrations.js",
     "importar-docs": "node src/scripts/importarDocs.js",
-    "importar-pacientes": "node src/scripts/importarPacientes.js"
+    "importar-pacientes": "node src/scripts/importarPacientes.js",
+    "restablecer-password": "node src/scripts/restablecerPassword.js"
   },
   "keywords": [
     "whatsapp",
