@@ -675,13 +675,19 @@ export function usuarios(lista, yo) {
              </button>
            </form>`;
 
+      // La propia contraseña se cambia desde "Mi cuenta", donde se pide la
+      // actual. Aquí solo se restablece la de los demás.
+      const restablecer = esYo
+        ? ''
+        : `<a href="/admin/usuarios/${u.id}/password" class="boton chico secundario">Contraseña</a>`;
+
       return `<tr>
         <td><b>${esc(u.username)}</b></td>
         <td>${esc(u.name ?? '—')}</td>
         <td>${papel}</td>
         <td>${estado}</td>
         <td>${esc(u.last_login_at ? fechaCorta(u.last_login_at) : 'Nunca ha entrado')}</td>
-        <td>${accion}</td>
+        <td class="acciones">${restablecer} ${accion}</td>
       </tr>`;
     })
     .join('');
@@ -701,6 +707,7 @@ export function usuarios(lista, yo) {
         El botón del papel lo cambia al otro. <b>Administrador</b> ve todo.
         <b>Doctor</b> ve pacientes, alertas y conocimiento, pero no la configuración
         del asistente, ni los usuarios, ni la seguridad.
+        Si alguien olvida su contraseña, <b>Contraseña</b> le pone una nueva.
       </p>
     </div>
 
@@ -731,6 +738,39 @@ export function usuarios(lista, yo) {
         ${requisitosDePassword()}
 
         <button type="submit">Crear</button>
+      </form>
+    </div>
+    ${scriptDeRequisitos()}`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Restablecer la contraseña de otro usuario                           */
+/* ------------------------------------------------------------------ */
+
+export function restablecerPassword(objetivo) {
+  const quien = objetivo.name
+    ? `${esc(objetivo.name)} (<code>${esc(objetivo.username)}</code>)`
+    : `<code>${esc(objetivo.username)}</code>`;
+
+  return `
+    <h1>Restablecer contraseña</h1>
+    <p class="sub">
+      Para ${quien}. No hace falta saber la contraseña anterior: se reemplaza por
+      la que escriba aquí y sus sesiones abiertas se cierran.
+    </p>
+
+    <div class="tarjeta">
+      <form method="post" action="/admin/usuarios/${objetivo.id}/password">
+        <label for="password">Contraseña provisional
+          <small>Al menos 12 caracteres. Entréguesela en persona y pídale que la
+          cambie desde "Mi cuenta" en cuanto entre.</small>
+        </label>
+        <input type="password" id="password" name="password" autocomplete="new-password" required autofocus>
+
+        ${requisitosDePassword({ usuario: objetivo.username })}
+
+        <button type="submit">Restablecer</button>
+        <a href="/admin/usuarios" class="boton secundario">Cancelar</a>
       </form>
     </div>
     ${scriptDeRequisitos()}`;

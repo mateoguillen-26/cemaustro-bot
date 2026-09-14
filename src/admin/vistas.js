@@ -93,7 +93,14 @@ const ESTILOS = `
   button.secundario { background: #fff; color: var(--texto); border: 1px solid var(--borde); }
   button.peligro { background: var(--urgente); }
   button.chico { padding: 5px 10px; font-size: 13px; margin: 0; }
+  a.boton {
+    display: inline-block; background: var(--acento); color: #fff; padding: 9px 16px;
+    border-radius: 7px; font-weight: 600; text-decoration: none; margin-top: 14px;
+  }
+  a.boton.secundario { background: #fff; color: var(--texto); border: 1px solid var(--borde); }
+  a.boton.chico { padding: 4px 10px; font-size: 13px; margin: 0; }
   form.enlinea { display: inline; }
+  td.acciones { white-space: nowrap; }
   .aviso { padding: 12px 14px; border-radius: 8px; margin-bottom: 18px; font-size: 14px; }
   .aviso-ok { background: var(--acento-claro); color: var(--acento); }
   .aviso-error { background: var(--urgente-claro); color: var(--urgente); }

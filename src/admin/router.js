@@ -686,6 +686,51 @@ adminRouter.post('/usuarios/:id/rol', (req, res) => {
   });
 });
 
+adminRouter.get('/usuarios/:id/password', (req, res) => {
+  const objetivo = db.usuarioPanelPorId(Number(req.params.id));
+  if (!objetivo) return volver(res, '/admin/usuarios', { tipo: 'error', texto: 'Ese usuario no existe.' });
+
+  // La propia se cambia desde "Mi cuenta", que exige la actual.
+  if (objetivo.id === req.usuario.id) return res.redirect(303, '/admin/cuenta');
+
+  res.type('html').send(
+    pagina({
+      titulo: 'Restablecer contraseña',
+      activo: '/admin/usuarios',
+      aviso: avisoDe(req),
+      usuario: req.usuario,
+      contenido: paginas.restablecerPassword(objetivo),
+    }),
+  );
+});
+
+adminRouter.post('/usuarios/:id/password', (req, res) => {
+  const id = Number(req.params.id);
+  const objetivo = db.usuarioPanelPorId(id);
+  if (!objetivo) return volver(res, '/admin/usuarios', { tipo: 'error', texto: 'Ese usuario no existe.' });
+
+  if (id === req.usuario.id) {
+    return volver(res, '/admin/usuarios', {
+      tipo: 'error',
+      texto: 'Su propia contraseña se cambia desde "Mi cuenta".',
+    });
+  }
+
+  const password = String(req.body.password ?? '');
+  const problema = problemaConLaPassword(password, { usuario: objetivo.username });
+  if (problema) return volver(res, `/admin/usuarios/${id}/password`, { tipo: 'error', texto: problema });
+
+  // La firma de la sesión lleva el resumen de la contraseña, así que las
+  // sesiones que ese usuario tuviera abiertas caen solas con este cambio.
+  db.cambiarPasswordPanel(id, resumirPassword(password));
+  logger.info(`Contraseña de "${objetivo.username}" restablecida por "${req.usuario.username}".`);
+
+  return volver(res, '/admin/usuarios', {
+    tipo: 'ok',
+    texto: `Contraseña de "${objetivo.username}" restablecida. Entréguesela en persona y pídale que la cambie.`,
+  });
+});
+
 /* ------------------------------------------------------------------ */
 /* Subir un archivo al conocimiento                                    */
 /*                                                                     */
