@@ -13,7 +13,8 @@
     "migrate": "node src/db/migrations.js",
     "importar-docs": "node src/scripts/importarDocs.js",
     "importar-pacientes": "node src/scripts/importarPacientes.js",
-    "restablecer-password": "node src/scripts/restablecerPassword.js"
+    "restablecer-password": "node src/scripts/restablecerPassword.js",
+    "foto-perfil": "node src/scripts/fotoPerfil.js"
   },
   "keywords": [
     "whatsapp",

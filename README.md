@@ -174,6 +174,19 @@ ese usuario se cierran solas.
 
 ---
 
+## La foto de perfil del número
+
+Se cambia con un comando, a partir de una imagen cuadrada (JPEG o PNG, hasta 5 MB):
+
+```bash
+npm run foto-perfil -- "img/foto diabuddy.jpeg"
+```
+
+WhatsApp la recorta en círculo, así que lo importante debe quedar en el
+centro. El cambio tarda unos minutos en verse en los teléfonos.
+
+---
+
 ## Las alertas
 
 El nivel se decide en dos sitios, y gana el más grave:
@@ -219,7 +232,7 @@ src/
 ├── webhook/whatsapp.js      ★ Recepción y orquestación
 ├── admin/                   Panel del doctor
 ├── utils/                   Fechas, cédula ecuatoriana, registro
-└── scripts/                 Importadores de docs y pacientes, restablecer contraseña
+└── scripts/                 Importadores, restablecer contraseña, foto de perfil
 ```
 
 ---
