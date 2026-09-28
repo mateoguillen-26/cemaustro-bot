@@ -204,6 +204,8 @@ export function pagina({ titulo, activo, contenido, aviso = null, usuario = null
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" type="image/png" href="/publico/icono.png">
+  <link rel="apple-touch-icon" href="/publico/icono-180.png">
   <title>${esc(titulo)} · ${esc(config.clinica.nombre)}</title>
   <style>${ESTILOS}</style>
 </head>
@@ -238,6 +240,8 @@ export function paginaEntrar({ aviso = null, usuario = '' } = {}) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" type="image/png" href="/publico/icono.png">
+  <link rel="apple-touch-icon" href="/publico/icono-180.png">
   <title>Entrar · ${esc(config.clinica.nombre)}</title>
   <style>${ESTILOS}</style>
 </head>

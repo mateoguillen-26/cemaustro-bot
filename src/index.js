@@ -1,6 +1,7 @@
 /**
  * Punto de entrada: servidor Express con el webhook de WhatsApp y el panel.
  */
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { config, validarConfiguracion, advertenciasDeConfiguracion } from './config.js';
 import { logger } from './utils/logger.js';
@@ -45,6 +46,12 @@ app.get('/health', (_req, res) => {
     res.status(503).json({ estado: 'error' });
   }
 });
+
+// Icono de la pestaña (la cara de Buddy, recortada de la foto de perfil de
+// WhatsApp). Público a propósito: la pantalla de entrada también lo usa.
+const carpetaPublica = fileURLToPath(new URL('./publico/', import.meta.url));
+app.use('/publico', express.static(carpetaPublica, { maxAge: '7d' }));
+app.get('/favicon.ico', (_req, res) => res.sendFile('icono.png', { root: carpetaPublica, maxAge: '7d' }));
 
 app.use(webhookRouter);
 app.use('/admin', adminRouter);
