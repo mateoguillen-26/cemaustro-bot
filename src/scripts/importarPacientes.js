@@ -8,7 +8,8 @@
  *
  * - "telefono" es opcional. Si lo pone, el paciente se verifica escribiendo
  *   solo su cédula desde ese número. Si lo deja en blanco, hará falta además
- *   un código de vinculación generado en el panel.
+ *   un código de vinculación generado en el panel. Se acepta como 0991234567
+ *   o con código de país (593991234567).
  * - Una cédula que ya existe se ACTUALIZA, no se duplica.
  */
 import fs from 'node:fs';
@@ -17,6 +18,7 @@ import { obtenerDB, cerrarDB } from '../db/database.js';
 import { ejecutarMigraciones } from '../db/migrations.js';
 import * as db from '../db/queries.js';
 import { esCedulaValida, normalizarCedula } from '../utils/cedula.js';
+import { esTelefonoValido, normalizarTelefono } from '../utils/telefono.js';
 
 /**
  * Lector de CSV mínimo pero correcto: entiende comillas dobles, comas dentro
@@ -118,7 +120,12 @@ function importar() {
       continue;
     }
 
-    const telefono = iTelefono >= 0 ? (fila[iTelefono] ?? '').replace(/[^0-9]/g, '') || null : null;
+    let telefono = iTelefono >= 0 ? normalizarTelefono(fila[iTelefono]) : null;
+    if (telefono && !esTelefonoValido(telefono)) {
+      console.log(`✗ ${nombre}: el teléfono "${fila[iTelefono]}" no parece completo. Se importa sin teléfono.`);
+      rechazados += 1;
+      telefono = null;
+    }
     const tipo = iTipo >= 0 ? (fila[iTipo] ?? '').trim() || null : null;
     const notas = iNotas >= 0 ? (fila[iNotas] ?? '').trim() || null : null;
 

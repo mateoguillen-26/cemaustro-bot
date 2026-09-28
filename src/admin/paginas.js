@@ -124,8 +124,8 @@ export function pacientes(lista, busqueda) {
         </div>
         <div class="barra">
           <div style="flex:1; min-width:200px">
-            <label for="phone">Teléfono <small>Con código de país, sin +. Si lo pone, el paciente se verifica solo con su cédula.</small></label>
-            <input type="text" id="phone" name="phone" placeholder="593987654321">
+            <label for="phone">Teléfono <small>Como 0991234567 o con código de país. Si lo pone, el paciente se verifica solo con su cédula.</small></label>
+            <input type="text" id="phone" name="phone" placeholder="0991234567">
           </div>
           <div style="flex:1; min-width:180px">
             <label for="diabetes_type">Tipo de diabetes</label>
@@ -241,7 +241,7 @@ export function paciente({ paciente: p, lecturas, resumenGlucemias, conversacion
           </div>
           <div style="flex:1; min-width:200px">
             <label for="phone">Teléfono <small>Cambiarlo cierra la sesión actual.</small></label>
-            <input type="text" id="phone" name="phone" value="${esc(p.phone ?? '')}" placeholder="593987654321">
+            <input type="text" id="phone" name="phone" value="${esc(p.phone ?? '')}" placeholder="0991234567">
           </div>
         </div>
         <div class="barra">

@@ -4,6 +4,7 @@
  */
 import 'dotenv/config';
 import path from 'node:path';
+import { normalizarTelefono } from './utils/telefono.js';
 
 /** Lee una variable de entorno. Devuelve el valor por defecto si está vacía. */
 function env(nombre, porDefecto = '') {
@@ -130,8 +131,8 @@ export const config = {
 
   /** Aviso al doctor cuando algo necesita su atención. */
   doctor: {
-    /** Número en formato internacional sin '+', ej. 593987654321. */
-    telefono: env('DOCTOR_TELEFONO', '').replace(/[^0-9]/g, ''),
+    /** Número en formato internacional sin '+', ej. 593987654321 (acepta 0987654321). */
+    telefono: normalizarTelefono(env('DOCTOR_TELEFONO', '')) ?? '',
     get alertasActivas() {
       return Boolean(this.telefono);
     },

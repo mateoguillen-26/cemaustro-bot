@@ -39,6 +39,7 @@ import {
 } from '../services/documentos.js';
 import { CATALOGO, ajuste, estaPersonalizado, guardarAjuste, restaurarAjuste } from '../services/ajustes.js';
 import { esCedulaValida, normalizarCedula } from '../utils/cedula.js';
+import { esTelefonoValido, normalizarTelefono } from '../utils/telefono.js';
 
 export const adminRouter = express.Router();
 
@@ -122,10 +123,9 @@ adminRouter.use(requiereSesion);
 // Y algunas secciones, además, solo para administradores.
 adminRouter.use(guardaDeSecciones);
 
-/** Normaliza un teléfono escrito a mano: solo dígitos, sin '+' ni espacios. */
-function normalizarTelefono(valor) {
-  return String(valor ?? '').replace(/[^0-9]/g, '') || null;
-}
+/** Aviso cuando el teléfono escrito no tiene forma de número. */
+const TELEFONO_INVALIDO =
+  'Ese teléfono no parece completo. Escríbalo como 0991234567 o con código de país (593991234567).';
 
 /* ------------------------------------------------------------------ */
 /* Resumen                                                             */
@@ -181,6 +181,9 @@ adminRouter.post('/pacientes', (req, res) => {
   }
 
   const telefono = normalizarTelefono(req.body.phone);
+  if (telefono && !esTelefonoValido(telefono)) {
+    return volver(res, '/admin/pacientes', { tipo: 'error', texto: TELEFONO_INVALIDO });
+  }
   if (telefono && db.pacientePorTelefono(telefono)) {
     return volver(res, '/admin/pacientes', {
       tipo: 'error',
@@ -254,6 +257,9 @@ adminRouter.post('/pacientes/:id', (req, res) => {
   }
 
   const telefono = normalizarTelefono(req.body.phone);
+  if (telefono && !esTelefonoValido(telefono)) {
+    return volver(res, `/admin/pacientes/${id}`, { tipo: 'error', texto: TELEFONO_INVALIDO });
+  }
   const ocupado = telefono ? db.pacientePorTelefono(telefono) : null;
   if (ocupado && ocupado.id !== id) {
     return volver(res, `/admin/pacientes/${id}`, {

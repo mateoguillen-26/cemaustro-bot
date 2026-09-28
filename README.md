@@ -110,7 +110,7 @@ Desde el panel, uno por uno, o de golpe con un CSV:
 
 ```csv
 cedula,nombre,telefono,tipo,notas
-0102030405,María Elena Vásquez,593987654321,2,Usa metformina. Vive sola.
+0102030405,María Elena Vásquez,0987654321,2,Usa metformina. Vive sola.
 0912345678,Luis Mora,,1,Debut reciente. Usa insulina basal.
 ```
 
@@ -119,7 +119,9 @@ npm run importar-pacientes -- data/pacientes.csv
 ```
 
 La columna `telefono` es opcional: si la deja en blanco, ese paciente necesitará
-un código de vinculación la primera vez.
+un código de vinculación la primera vez. Puede escribirse como se usa a diario
+(`0991234567`) o con código de país (`593991234567`); se guarda siempre en el
+formato con el que llegan los mensajes de WhatsApp.
 
 ### 4. Cargar la base de conocimiento
 

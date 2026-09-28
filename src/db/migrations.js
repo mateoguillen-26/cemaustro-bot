@@ -230,6 +230,29 @@ const MIGRACIONES = [
       UPDATE admin_users SET role = 'administrador';
     `,
   },
+  {
+    version: 8,
+    nombre: 'teléfonos del padrón en formato de WhatsApp',
+    sql: `
+      -- Antes el panel y el CSV guardaban el teléfono tal como se escribía, y
+      -- un 0991234567 nunca coincidía con el 593991234567 con el que llega el
+      -- mensaje. Se pasan al formato de WhatsApp los que quedaron así.
+      --
+      -- Si ya hay otro paciente con el número corregido, esa fila se deja
+      -- como está: el teléfono es único y no se puede tener en dos historias.
+      UPDATE patients
+         SET phone = '593' || substr(phone, 2),
+             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+       WHERE length(phone) = 10 AND phone GLOB '09*'
+         AND NOT EXISTS (SELECT 1 FROM patients o WHERE o.phone = '593' || substr(patients.phone, 2));
+
+      UPDATE patients
+         SET phone = '593' || substr(phone, 5),
+             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+       WHERE length(phone) = 13 AND phone GLOB '59309*'
+         AND NOT EXISTS (SELECT 1 FROM patients o WHERE o.phone = '593' || substr(patients.phone, 5));
+    `,
+  },
 ];
 
 /** Aplica las migraciones que falten. Devuelve la versión final del esquema. */

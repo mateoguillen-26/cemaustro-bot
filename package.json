@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
+    "test": "node --test",
     "migrate": "node src/db/migrations.js",
     "importar-docs": "node src/scripts/importarDocs.js",
     "importar-pacientes": "node src/scripts/importarPacientes.js",

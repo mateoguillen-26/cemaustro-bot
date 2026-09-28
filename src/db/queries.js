@@ -74,9 +74,13 @@ export function listarPacientes({ soloActivos = false, busqueda = '' } = {}) {
 
   if (soloActivos) filtros.push('p.active = 1');
   if (busqueda) {
-    filtros.push('(p.name LIKE ? OR p.cedula LIKE ? OR p.phone LIKE ?)');
+    // El teléfono se guarda como 5939…, pero el doctor lo busca como 099…
+    const digitos = busqueda.replace(/[^0-9]/g, '');
+    const comoTelefono = /^09/.test(digitos) ? `%593${digitos.slice(1)}%` : `%${busqueda}%`;
+
+    filtros.push('(p.name LIKE ? OR p.cedula LIKE ? OR p.phone LIKE ? OR p.phone LIKE ?)');
     const patron = `%${busqueda}%`;
-    parametros.push(patron, patron, patron);
+    parametros.push(patron, patron, patron, comoTelefono);
   }
 
   const donde = filtros.length ? `WHERE ${filtros.join(' AND ')}` : '';
