@@ -29,17 +29,23 @@ export async function levantarBot({ puertoBot, puertoWhatsapp, entorno = {} }) {
     WHATSAPP_TOKEN: 'token-de-prueba',
     WHATSAPP_PHONE_NUMBER_ID: '123',
     WHATSAPP_BASE_URL: `http://127.0.0.1:${puertoWhatsapp}`,
+    // El mismo servidor falso hace de OpenAI: así se puede ver qué se le
+    // habría mandado al modelo, sin que salga nada.
+    OPENAI_BASE_URL: `http://127.0.0.1:${puertoWhatsapp}/openai`,
+    OPENAI_API_KEY: 'clave-openai-de-prueba',
     CLINICA_TELEFONO: '+593 99 000 0000',
     ...entorno,
   });
 
-  /* WhatsApp de mentira: guarda cada envío. */
+  /* WhatsApp (y OpenAI) de mentira: guarda cada envío. */
   const enviados = [];
+  const peticiones = [];
   const whatsappFalso = http.createServer((req, res) => {
     let cuerpo = '';
     req.on('data', (d) => (cuerpo += d));
     req.on('end', () => {
       const json = JSON.parse(cuerpo || '{}');
+      peticiones.push({ ruta: req.url, cuerpo: json });
       if (json.type) enviados.push(json); // los "leído" no traen type
       res.setHeader('content-type', 'application/json');
       res.end('{"messages":[{"id":"wamid.salida"}]}');
@@ -78,6 +84,31 @@ export async function levantarBot({ puertoBot, puertoWhatsapp, entorno = {} }) {
     return enviados.slice(antes);
   }
 
+  /**
+   * Crea un usuario del panel y entra con él. Devuelve una función para
+   * pedir páginas con esa sesión: pedir(ruta) hace GET; pedir(ruta, campos), POST.
+   */
+  async function entrar(usuario, password, rol) {
+    const { resumirPassword } = await import('../../src/admin/auth.js');
+    queries.crearUsuarioPanel({ usuario, hash: resumirPassword(password), rol });
+    const origen = `http://127.0.0.1:${puertoBot}`;
+    const r = await fetch(`${origen}/admin/entrar`, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', origin: origen },
+      body: new URLSearchParams({ usuario, password }),
+    });
+    assert.equal(r.status, 303, 'entrar al panel');
+    const cookie = r.headers.get('set-cookie').split(';')[0];
+    return (ruta, campos) =>
+      fetch(`${origen}${ruta}`, {
+        method: campos ? 'POST' : 'GET',
+        redirect: 'manual',
+        headers: { cookie, origin: origen, 'content-type': 'application/x-www-form-urlencoded' },
+        body: campos ? new URLSearchParams(campos) : undefined,
+      });
+  }
+
   async function cerrar() {
     whatsappFalso.close();
     servidor?.close();
@@ -89,7 +120,9 @@ export async function levantarBot({ puertoBot, puertoWhatsapp, entorno = {} }) {
     db,
     queries,
     enviados,
+    peticiones,
     llega,
+    entrar,
     cerrar,
     ultimoId: () => `wamid.prueba.${contador}`,
     url: (ruta) => `http://127.0.0.1:${puertoBot}${ruta}`,

@@ -15,10 +15,9 @@ const { ejecutarMigraciones } = await import('../src/db/migrations.js');
 
 test('la migración 8 pasa los 09… del padrón al formato de WhatsApp', () => {
   const db = obtenerDB();
-  ejecutarMigraciones();
 
-  // Se simula una base de antes del cambio.
-  db.pragma('user_version = 7');
+  // Una base como estaba antes del cambio: hasta la versión 7.
+  ejecutarMigraciones(7);
   const insertar = db.prepare('INSERT INTO patients (cedula, name, phone) VALUES (?, ?, ?)');
   insertar.run('0102030405', 'Local', '0991234567');
   insertar.run('0102030406', 'Con 593 y 0', '5930981234567');

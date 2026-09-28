@@ -125,6 +125,27 @@ adminRouter.use(requiereSesion);
 // Y algunas secciones, además, solo para administradores.
 adminRouter.use(guardaDeSecciones);
 
+/**
+ * Datos clínicos del formulario. Devuelve { error } si la edad no sirve.
+ * Los textos se recortan a un largo razonable para una ficha.
+ */
+function datosClinicosDe(body) {
+  const texto = (campo) => String(body[campo] ?? '').trim().slice(0, 1000) || null;
+  const edadEscrita = String(body.age ?? '').trim();
+  const edad = edadEscrita === '' ? null : Number(edadEscrita);
+  if (edad !== null && !(Number.isInteger(edad) && edad >= 0 && edad <= 120)) {
+    return { error: 'La edad tiene que ser un número entero entre 0 y 120.' };
+  }
+  return {
+    datos: {
+      edad,
+      alergias: texto('food_allergies'),
+      medicamentos: texto('medications'),
+      otrasEnfermedades: texto('other_conditions'),
+    },
+  };
+}
+
 /** Aviso cuando el teléfono escrito no tiene forma de número. */
 const TELEFONO_INVALIDO =
   'Ese teléfono no parece completo. Escríbalo como 0991234567 o con código de país (593991234567).';
@@ -193,12 +214,18 @@ adminRouter.post('/pacientes', (req, res) => {
     });
   }
 
+  const clinicos = datosClinicosDe(req.body);
+  if (clinicos.error) {
+    return volver(res, '/admin/pacientes', { tipo: 'error', texto: clinicos.error });
+  }
+
   try {
     const paciente = db.crearPaciente({
       cedula,
       name: nombre,
       phone: telefono,
       diabetesType: req.body.diabetes_type || null,
+      clinicos: clinicos.datos,
     });
     logger.info(`Paciente #${paciente.id} agregado desde el panel.`);
     return volver(res, `/admin/pacientes/${paciente.id}`, {
@@ -271,8 +298,14 @@ adminRouter.post('/pacientes/:id', (req, res) => {
     });
   }
 
+  const clinicos = datosClinicosDe(req.body);
+  if (clinicos.error) {
+    return volver(res, `/admin/pacientes/${id}`, { tipo: 'error', texto: clinicos.error });
+  }
+
   const activo = req.body.active === '1';
 
+  db.actualizarDatosClinicos(id, clinicos.datos);
   db.actualizarPaciente(id, {
     name: nombre,
     phone: telefono,

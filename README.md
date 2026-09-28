@@ -196,7 +196,7 @@ Separe los temas con una línea en blanco: así se parten mejor y se buscan mejo
 | Sección | Para qué |
 |---|---|
 | **Resumen** | Métricas del día y alertas sin revisar. |
-| **Pacientes** | El padrón. Agregar, editar, código de vinculación, cierre de sesión. La ficha muestra glucemias con gráfico, alertas y la conversación completa. |
+| **Pacientes** | El padrón. Agregar, editar, código de vinculación, cierre de sesión. La ficha guarda edad, alergias alimenticias, medicamentos y otras enfermedades (solo para el equipo: el asistente no los usa) y muestra glucemias con gráfico, alertas y la conversación. |
 | **Alertas** | Todo lo que el bot marcó para que el doctor lo mire, con el fragmento que lo disparó. |
 | **Conocimiento** | Documentos: subir, encender/apagar, reindexar, borrar. |
 | **Configuración** | Las instrucciones clínicas del asistente y los textos fijos, editables en caliente sin reiniciar. |

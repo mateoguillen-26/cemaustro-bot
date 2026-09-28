@@ -138,9 +138,38 @@ export function pacientes(lista, busqueda) {
             </select>
           </div>
         </div>
+        ${camposClinicos()}
         <button type="submit">Agregar paciente</button>
       </form>
     </div>`;
+}
+
+/**
+ * Edad, alergias, medicamentos y otras enfermedades. Los mismos campos al
+ * agregar un paciente y en su ficha. Solo los ve el equipo del consultorio.
+ */
+function camposClinicos(p = {}) {
+  const area = (id, etiqueta, ejemplo, valor) => `
+          <div style="flex:1; min-width:220px">
+            <label for="${id}">${etiqueta}</label>
+            <textarea id="${id}" name="${id}" rows="2" style="min-height:56px" placeholder="${esc(ejemplo)}">${esc(valor ?? '')}</textarea>
+          </div>`;
+
+  return `
+        <div class="barra">
+          <div style="flex:0 0 110px">
+            <label for="age">Edad</label>
+            <input type="number" id="age" name="age" min="0" max="120" step="1" inputmode="numeric" value="${p.age ?? ''}">
+          </div>
+          ${area('food_allergies', 'Alergias alimenticias', 'Ej: maní, mariscos. Vacío si no tiene.', p.food_allergies)}
+        </div>
+        <div class="barra">
+          ${area('medications', 'Medicamentos en uso', 'Ej: metformina 850 mg c/12 h, insulina glargina 20 U', p.medications)}
+          ${area('other_conditions', 'Otras enfermedades', 'Ej: hipertensión, hipotiroidismo', p.other_conditions)}
+        </div>
+        <p class="sub" style="font-size:12px; margin:-4px 0 12px">
+          Estos datos solo los ve el equipo del consultorio; el asistente no los usa.
+        </p>`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -270,6 +299,7 @@ export function paciente({ paciente: p, lecturas, resumenGlucemias, conversacion
             </select>
           </div>
         </div>
+        ${camposClinicos(p)}
         <label for="notes">Notas para el asistente
           <small>Lo que escriba aquí lo lee el modelo en cada respuesta. Ej: "Usa insulina basal. Vive sola. Poca visión."</small>
         </label>

@@ -160,29 +160,9 @@ test('un número que aceptó el aviso pero no se verificó también puede borrar
 /* Desde el panel                                                      */
 /* ------------------------------------------------------------------ */
 
-async function entrar(usuario, password) {
-  const { resumirPassword } = await import('../src/admin/auth.js');
-  queries.crearUsuarioPanel({ usuario, hash: resumirPassword(password), rol: usuario === 'jefe' ? 'administrador' : 'doctor' });
-  const r = await fetch(bot.url('/admin/entrar'), {
-    method: 'POST',
-    redirect: 'manual',
-    headers: { 'content-type': 'application/x-www-form-urlencoded', origin: bot.url('') },
-    body: new URLSearchParams({ usuario, password }),
-  });
-  assert.equal(r.status, 303);
-  const cookie = r.headers.get('set-cookie').split(';')[0];
-  return (ruta, cuerpo) =>
-    fetch(bot.url(ruta), {
-      method: cuerpo ? 'POST' : 'GET',
-      redirect: 'manual',
-      headers: { cookie, origin: bot.url(''), 'content-type': 'application/x-www-form-urlencoded' },
-      body: cuerpo ? new URLSearchParams(cuerpo) : undefined,
-    });
-}
-
 test('el doctor no ve el botón de borrar ni puede usarlo', async () => {
   const p = pacienteCompleto('0102030418', '593990000013');
-  const comoDoctor = await entrar('doctora', 'Contraseña-de-prueba-1!');
+  const comoDoctor = await bot.entrar('doctora', 'Contraseña-de-prueba-1!', 'doctor');
 
   const ficha = await (await comoDoctor(`/admin/pacientes/${p.id}`)).text();
   assert.doesNotMatch(ficha, /Eliminar todos los datos/);
@@ -194,7 +174,7 @@ test('el doctor no ve el botón de borrar ni puede usarlo', async () => {
 
 test('el administrador borra solo si escribe bien la cédula', async () => {
   const p = db.prepare("SELECT * FROM patients WHERE cedula = '0102030418'").get();
-  const comoJefe = await entrar('jefe', 'Contraseña-de-prueba-2!');
+  const comoJefe = await bot.entrar('jefe', 'Contraseña-de-prueba-2!', 'administrador');
 
   const ficha = await (await comoJefe(`/admin/pacientes/${p.id}`)).text();
   assert.match(ficha, /Eliminar todos los datos/);

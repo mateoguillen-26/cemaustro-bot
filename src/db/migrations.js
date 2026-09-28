@@ -302,14 +302,29 @@ const MIGRACIONES = [
       );
     `,
   },
+  {
+    version: 11,
+    nombre: 'datos clínicos del paciente',
+    sql: `
+      -- Lo llena el doctor en el panel. Solo lo ve él: no se le pasa al
+      -- modelo (para eso están las "notas para el asistente").
+      ALTER TABLE patients ADD COLUMN age INTEGER;
+      ALTER TABLE patients ADD COLUMN food_allergies TEXT;
+      ALTER TABLE patients ADD COLUMN medications TEXT;
+      ALTER TABLE patients ADD COLUMN other_conditions TEXT;
+    `,
+  },
 ];
 
-/** Aplica las migraciones que falten. Devuelve la versión final del esquema. */
-export function ejecutarMigraciones() {
+/**
+ * Aplica las migraciones que falten. Devuelve la versión final del esquema.
+ * `hasta` sirve a las pruebas para dejar una base como estaba en una versión vieja.
+ */
+export function ejecutarMigraciones(hasta = Infinity) {
   const db = obtenerDB();
   const actual = db.pragma('user_version', { simple: true });
 
-  const pendientes = MIGRACIONES.filter((m) => m.version > actual);
+  const pendientes = MIGRACIONES.filter((m) => m.version > actual && m.version <= hasta);
   if (pendientes.length === 0) {
     logger.info(`Base de datos al día (versión ${actual}).`);
     return actual;

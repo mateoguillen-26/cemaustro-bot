@@ -40,17 +40,46 @@ export function obtenerPaciente(id) {
 /**
  * Agrega un paciente al padrón.
  * @param {{cedula: string, name: string, phone?: string|null,
- *          diabetesType?: string|null, notes?: string|null}} datos
+ *          diabetesType?: string|null, notes?: string|null,
+ *          clinicos?: {edad?: number|null, alergias?: string|null,
+ *                      medicamentos?: string|null, otrasEnfermedades?: string|null}}} datos
  */
-export function crearPaciente({ cedula, name, phone = null, diabetesType = null, notes = null }) {
+export function crearPaciente({ cedula, name, phone = null, diabetesType = null, notes = null, clinicos = {} }) {
   const resultado = obtenerDB()
     .prepare(
-      `INSERT INTO patients (cedula, name, phone, diabetes_type, notes)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO patients (cedula, name, phone, diabetes_type, notes,
+                             age, food_allergies, medications, other_conditions)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(cedula, name, phone || null, diabetesType || null, notes || null);
+    .run(
+      cedula,
+      name,
+      phone || null,
+      diabetesType || null,
+      notes || null,
+      clinicos.edad ?? null,
+      clinicos.alergias || null,
+      clinicos.medicamentos || null,
+      clinicos.otrasEnfermedades || null,
+    );
 
   return obtenerPaciente(resultado.lastInsertRowid);
+}
+
+/**
+ * Actualiza los datos clínicos que llena el doctor. Va aparte de
+ * actualizarPaciente para que el importador de CSV, que no los trae, no los
+ * borre al actualizar a alguien.
+ */
+export function actualizarDatosClinicos(id, { edad, alergias, medicamentos, otrasEnfermedades }) {
+  obtenerDB()
+    .prepare(
+      `UPDATE patients
+          SET age = ?, food_allergies = ?, medications = ?, other_conditions = ?,
+              updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+        WHERE id = ?`,
+    )
+    .run(edad ?? null, alergias || null, medicamentos || null, otrasEnfermedades || null, id);
 }
 
 /** Actualiza los datos editables de un paciente. */
