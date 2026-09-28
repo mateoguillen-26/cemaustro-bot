@@ -133,6 +133,6 @@ function arrancar() {
   return servidor;
 }
 
-arrancar();
+const servidor = arrancar();
 
-export { app };
+export { app, servidor };

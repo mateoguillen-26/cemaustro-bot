@@ -253,6 +253,38 @@ const MIGRACIONES = [
          AND NOT EXISTS (SELECT 1 FROM patients o WHERE o.phone = '593' || substr(patients.phone, 5));
     `,
   },
+  {
+    version: 9,
+    nombre: 'consentimiento de tratamiento de datos',
+    sql: `
+      -- Cada redacción del aviso de consentimiento que se ha mostrado alguna
+      -- vez. Si el doctor cambia el texto en el panel, nace una versión nueva
+      -- y las anteriores se conservan: hay que poder decir QUÉ aceptó cada
+      -- persona, palabra por palabra.
+      CREATE TABLE IF NOT EXISTS consent_texts (
+          version INTEGER PRIMARY KEY AUTOINCREMENT,
+          text_hash TEXT NOT NULL UNIQUE,     -- sha256 del texto, para no duplicar
+          text TEXT NOT NULL,
+          created_at DATETIME DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+
+      -- Quién aceptó, cuándo y qué versión. Se acepta ANTES de dar la cédula,
+      -- así que al principio solo se sabe el teléfono; al verificarse, la
+      -- fila se liga al paciente. Un rechazo no se guarda: de quien no
+      -- acepta no se guarda nada.
+      CREATE TABLE IF NOT EXISTS consents (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          phone TEXT NOT NULL,
+          patient_id INTEGER REFERENCES patients(id),
+          text_version INTEGER NOT NULL REFERENCES consent_texts(version),
+          wa_message_id TEXT,                 -- el toque del botón en WhatsApp
+          accepted_at DATETIME DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_consents_phone ON consents (phone);
+      CREATE INDEX IF NOT EXISTS idx_consents_patient ON consents (patient_id);
+    `,
+  },
 ];
 
 /** Aplica las migraciones que falten. Devuelve la versión final del esquema. */

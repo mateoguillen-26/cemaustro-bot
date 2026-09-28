@@ -53,6 +53,22 @@ fallidos el número queda bloqueado una hora.
 
 ---
 
+## Consentimiento de datos
+
+Antes de pedir la cédula, un número nuevo recibe un aviso sobre el
+tratamiento de sus datos con dos botones: **Acepto** y **No acepto**.
+
+- Si acepta, se guarda el teléfono, la fecha y **qué versión del texto** vio;
+  al verificarse, eso pasa a su ficha en el panel.
+- Si no acepta, no se guarda nada suyo y se le da el teléfono del consultorio.
+- Mientras no toque un botón, no se procesa nada de lo que escriba, ni la cédula.
+- Los números que ya se habían verificado alguna vez no reciben el aviso.
+
+El texto se edita en *Panel → Configuración* (hasta 1024 caracteres, límite de
+WhatsApp). Cada redacción distinta queda guardada como una versión nueva.
+
+---
+
 ## Puesta en marcha
 
 ### 1. Crear la aplicación en Meta

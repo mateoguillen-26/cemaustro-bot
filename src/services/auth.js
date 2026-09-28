@@ -246,6 +246,8 @@ export function intentarVerificar(telefono, texto) {
 function verificar(paciente, telefono, cedulaEnmascarada, via) {
   db.abrirSesion(paciente.id, telefono, config.auth.diasDeSesion);
   db.registrarIntento(telefono, cedulaEnmascarada, 'ok', via);
+  // Lo que aceptó este número antes de dar la cédula pasa a su ficha.
+  db.ligarConsentimientos(telefono, paciente.id);
   logger.info(
     `Paciente #${paciente.id} verificado desde ${ofuscarTelefono(telefono)} (${via}).`,
   );

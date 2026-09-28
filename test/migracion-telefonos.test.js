@@ -35,7 +35,7 @@ test('la migración 8 pasa los 09… del padrón al formato de WhatsApp', () => 
   assert.equal(telefonoDe('0102030407'), '593971234567');
   assert.equal(telefonoDe('0102030408'), null);
   assert.equal(telefonoDe('0102030409'), '0971234567');
-  assert.equal(db.pragma('user_version', { simple: true }), 8);
+  assert.ok(db.pragma('user_version', { simple: true }) >= 8);
 
   cerrarDB();
   fs.rmSync(carpeta, { recursive: true, force: true });

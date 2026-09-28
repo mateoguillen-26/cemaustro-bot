@@ -621,3 +621,79 @@ export function contarAdministradoresPanel() {
 export function cambiarRolPanel(id, rol) {
   obtenerDB().prepare('UPDATE admin_users SET role = ? WHERE id = ?').run(rol, id);
 }
+
+/* ================================================================== */
+/* Consentimiento de tratamiento de datos                              */
+/* ================================================================== */
+
+/**
+ * Versión de un texto de consentimiento. La crea si es la primera vez que se
+ * muestra esa redacción exacta.
+ */
+export function versionDeTextoConsentimiento(texto, resumen) {
+  // Se busca antes de insertar: un INSERT ... ON CONFLICT DO NOTHING gasta
+  // igual un número de AUTOINCREMENT, y las versiones saltarían 1, 4, 7…
+  const conexion = obtenerDB();
+  const buscar = () =>
+    conexion.prepare('SELECT version FROM consent_texts WHERE text_hash = ?').pluck().get(resumen);
+  return (
+    buscar() ??
+    Number(
+      conexion.prepare('INSERT INTO consent_texts (text_hash, text) VALUES (?, ?)').run(resumen, texto)
+        .lastInsertRowid,
+    )
+  );
+}
+
+export function existeVersionConsentimiento(version) {
+  return Boolean(
+    obtenerDB().prepare('SELECT 1 FROM consent_texts WHERE version = ?').get(version),
+  );
+}
+
+/** Anota que un teléfono aceptó una versión del texto. */
+export function registrarConsentimiento(telefono, version, waMessageId) {
+  obtenerDB()
+    .prepare('INSERT INTO consents (phone, text_version, wa_message_id) VALUES (?, ?, ?)')
+    .run(telefono, version, waMessageId ?? null);
+}
+
+/** ¿Este teléfono ya aceptó alguna vez? */
+export function tieneConsentimiento(telefono) {
+  return Boolean(obtenerDB().prepare('SELECT 1 FROM consents WHERE phone = ? LIMIT 1').get(telefono));
+}
+
+/**
+ * ¿Este teléfono se verificó alguna vez como paciente? Las sesiones no se
+ * borran al vencer o revocarse, así que basta con que haya existido una.
+ */
+export function seVerificoAlgunaVez(telefono) {
+  return Boolean(
+    obtenerDB()
+      .prepare(
+        `SELECT 1 FROM sessions WHERE phone = ?
+         UNION ALL
+         SELECT 1 FROM auth_attempts WHERE phone = ? AND outcome = 'ok'
+         LIMIT 1`,
+      )
+      .get(telefono, telefono),
+  );
+}
+
+/** Liga al paciente los consentimientos que dio su teléfono antes de verificarse. */
+export function ligarConsentimientos(telefono, pacienteId) {
+  obtenerDB()
+    .prepare('UPDATE consents SET patient_id = ? WHERE phone = ? AND patient_id IS NULL')
+    .run(pacienteId, telefono);
+}
+
+/** Último consentimiento de un paciente, o null (para la ficha del panel). */
+export function consentimientoDe(pacienteId) {
+  return (
+    obtenerDB()
+      .prepare(
+        'SELECT text_version, accepted_at FROM consents WHERE patient_id = ? ORDER BY id DESC LIMIT 1',
+      )
+      .get(pacienteId) ?? null
+  );
+}

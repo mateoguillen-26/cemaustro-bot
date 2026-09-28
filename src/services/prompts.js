@@ -152,3 +152,38 @@ export const TEXTOS_POR_DEFECTO = {
   tipoNoSoportado:
     'Por ahora puedo leer texto, escuchar notas de voz y ver fotos de sus comidas. ¿Me lo puede escribir, por favor?',
 };
+
+/**
+ * Aviso de consentimiento: lo primero que recibe un número nuevo, con los
+ * botones Acepto / No acepto. BORRADOR: debe revisarlo alguien del
+ * consultorio o un abogado (LOPDP) antes de darlo por definitivo.
+ *
+ * WhatsApp admite hasta 1024 caracteres en un mensaje con botones.
+ * Recibe los datos del consultorio porque este archivo no importa nada.
+ */
+export function consentimientoPorDefecto({ clinica, doctor, telefono }) {
+  const contacto = telefono ? ` o al ${telefono}` : '';
+  return (
+    '🔒 *Antes de empezar: sus datos*\n\n' +
+    `Soy el asistente de diabetes de ${clinica}. Para atenderle necesito tratar datos ` +
+    'personales y de salud: su cédula, su número, lo que me escriba o envíe (textos, ' +
+    'audios, fotos) y sus glucemias.\n\n' +
+    `*Para qué:* darle información sobre diabetes, registrar sus valores y avisar a ${doctor} ` +
+    'si algo requiere atención.\n\n' +
+    '*Quién más los procesa:* WhatsApp (Meta), para los mensajes, y OpenAI, para entender ' +
+    'textos, audios y fotos. Ambos tienen servidores fuera del Ecuador.\n\n' +
+    'Sus datos se guardan cifrados. Puede pedir verlos, corregirlos o eliminarlos en el ' +
+    `consultorio${contacto}. Este asistente no reemplaza una consulta ni atiende emergencias.\n\n` +
+    'Política completa: https://cemaustro.com/privacidad-asistente\n\n' +
+    '¿Acepta el tratamiento de sus datos?'
+  );
+}
+
+/** Respuesta a quien toca "No acepto". */
+export function consentimientoRechazadoPorDefecto({ telefono }) {
+  const contacto = telefono ? ` Puede comunicarse con el consultorio al ${telefono}.` : '';
+  return (
+    'Entendido. Sin su autorización no puedo atenderle por este medio, y no he guardado ' +
+    `ningún dato suyo.${contacto}\n\nSi cambia de opinión, escríbame de nuevo.`
+  );
+}

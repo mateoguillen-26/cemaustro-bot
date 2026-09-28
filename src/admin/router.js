@@ -233,6 +233,7 @@ function fichaDe(pacienteId, extras = {}) {
     conversacion: db.conversacionDe(paciente.id, 120),
     alertas: db.alertasDe(paciente.id),
     codigoPendiente: db.tieneCodigoPendiente(paciente.id),
+    consentimiento: db.consentimientoDe(paciente.id),
     codigo: null,
     ...extras,
   });

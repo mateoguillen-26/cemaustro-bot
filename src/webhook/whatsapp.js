@@ -17,6 +17,7 @@ import { logger, ofuscarTelefono } from '../utils/logger.js';
 import * as db from '../db/queries.js';
 import * as whatsapp from '../services/whatsapp.js';
 import * as auth from '../services/auth.js';
+import * as consentimiento from '../services/consentimiento.js';
 import * as glucemias from '../services/glucemias.js';
 import * as alertas from '../services/alertas.js';
 import { transcribirAudio } from '../services/transcription.js';
@@ -162,6 +163,17 @@ async function atenderDesconocido(telefono, mensaje, waMessageId) {
   }
 
   whatsapp.marcarComoLeido(waMessageId).catch(() => {});
+
+  // Un número nuevo tiene que aceptar el tratamiento de datos antes de dar
+  // su cédula. Si acaba de aceptar, se sigue pidiéndole la cédula.
+  if (consentimiento.necesitaConsentimiento(telefono)) {
+    const acepto = await consentimiento.atender(telefono, mensaje);
+    if (acepto) {
+      const { respuesta } = auth.intentarVerificar(telefono, '');
+      await whatsapp.enviarMensaje(telefono, respuesta);
+    }
+    return;
+  }
 
   if (mensaje.type !== 'text') {
     await whatsapp.enviarMensaje(

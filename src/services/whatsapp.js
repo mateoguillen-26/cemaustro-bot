@@ -78,6 +78,45 @@ export async function enviarMensaje(telefono, texto) {
 }
 
 /**
+ * Envía un mensaje con botones de respuesta (hasta 3). Como el texto libre,
+ * solo funciona dentro de la ventana de 24 h.
+ *
+ * Cuando la persona toca uno, llega un mensaje de tipo "interactive" con el
+ * `id` del botón (ver idDeBotonTocado).
+ *
+ * @param {string} telefono
+ * @param {string} texto cuerpo del mensaje, hasta 1024 caracteres
+ * @param {{id: string, titulo: string}[]} botones títulos de hasta 20 caracteres
+ */
+export async function enviarBotones(telefono, texto, botones) {
+  return enviar(
+    {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: telefono,
+      type: 'interactive',
+      interactive: {
+        type: 'button',
+        body: { text: texto.slice(0, 1024) },
+        action: {
+          buttons: botones.slice(0, 3).map((b) => ({
+            type: 'reply',
+            reply: { id: b.id, title: b.titulo.slice(0, 20) },
+          })),
+        },
+      },
+    },
+    'Mensaje con botones',
+  );
+}
+
+/** `id` del botón que tocó la persona, o null si el mensaje no es eso. */
+export function idDeBotonTocado(mensaje) {
+  if (mensaje?.type !== 'interactive') return null;
+  return mensaje.interactive?.button_reply?.id ?? null;
+}
+
+/**
  * Envía una plantilla aprobada por Meta. Funciona también fuera de la
  * ventana de 24 horas, que es el caso de las alertas al doctor de madrugada.
  *

@@ -168,7 +168,7 @@ function graficoGlucemias(lecturas) {
           <p class="sub" style="font-size:12px">Últimas ${orden.length} mediciones. Pase el cursor para ver el detalle.</p>`;
 }
 
-export function paciente({ paciente: p, lecturas, resumenGlucemias, conversacion, alertas, codigo, codigoPendiente }) {
+export function paciente({ paciente: p, lecturas, resumenGlucemias, conversacion, alertas, codigo, codigoPendiente, consentimiento }) {
   const bloqueCodigo = codigo
     ? `<div class="tarjeta" style="border-color:var(--acento)">
          <b>Código de vinculación para ${esc(p.name)}</b>
@@ -228,6 +228,11 @@ export function paciente({ paciente: p, lecturas, resumenGlucemias, conversacion
     <p style="margin:0 0 6px"><a href="/admin/pacientes">← Pacientes</a></p>
     <h1>${esc(p.name)}</h1>
     <p class="sub">CI ${esc(p.cedula)} · ${p.phone ? `+${esc(p.phone)}` : 'sin número vinculado'} · ${estadoDelNumero(p)}</p>
+    <p class="sub">Consentimiento de datos: ${
+      consentimiento
+        ? `aceptado el ${esc(fechaCorta(consentimiento.accepted_at))} (texto v${consentimiento.text_version})`
+        : 'sin registro (usaba el asistente antes de que se pidiera)'
+    }</p>
 
     ${bloqueCodigo}
 

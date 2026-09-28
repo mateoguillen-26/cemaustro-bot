@@ -14,7 +14,16 @@ import {
   PROMPT_COMIDA_POR_DEFECTO,
   TEXTOS_POR_DEFECTO,
   MARCAS_PROMPT,
+  consentimientoPorDefecto,
+  consentimientoRechazadoPorDefecto,
 } from './prompts.js';
+
+/** Datos del consultorio con los que se arman los textos de consentimiento. */
+const datosConsultorio = () => ({
+  clinica: config.clinica.nombre,
+  doctor: config.clinica.doctor,
+  telefono: config.clinica.telefonoContacto,
+});
 
 /**
  * Catálogo de lo que se puede tocar. `tipo` decide cómo se pinta el campo en
@@ -101,6 +110,23 @@ export const CATALOGO = [
     tipo: 'texto',
     porDefecto: () => TEXTOS_POR_DEFECTO.tipoNoSoportado,
   },
+  {
+    clave: 'consentimiento.texto',
+    etiqueta: 'Aviso de consentimiento de datos',
+    ayuda:
+      'Lo primero que recibe un número nuevo, con los botones "Acepto" y "No acepto". ' +
+      'Los pacientes que ya usaban el bot no lo reciben. Hasta 1024 caracteres (límite de WhatsApp). ' +
+      'Si lo cambia, cuenta como una versión nueva: se guarda qué versión aceptó cada persona.',
+    tipo: 'texto_largo',
+    maximoCaracteres: 1024,
+    porDefecto: () => consentimientoPorDefecto(datosConsultorio()),
+  },
+  {
+    clave: 'consentimiento.rechazado',
+    etiqueta: 'Respuesta a quien no acepta',
+    tipo: 'texto_largo',
+    porDefecto: () => consentimientoRechazadoPorDefecto(datosConsultorio()),
+  },
 ];
 
 const PorClave = new Map(CATALOGO.map((a) => [a.clave, a]));
@@ -164,6 +190,9 @@ export function guardarAjuste(clave, valor) {
 
   const texto = String(valor ?? '').trim();
   if (!texto) return 'No puede quedar vacío.';
+  if (definicion.maximoCaracteres && texto.length > definicion.maximoCaracteres) {
+    return `Tiene ${texto.length} caracteres; el máximo es ${definicion.maximoCaracteres}.`;
+  }
   db.escribirAjuste(clave, texto);
   return null;
 }
