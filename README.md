@@ -67,6 +67,25 @@ tratamiento de sus datos con dos botones: **Acepto** y **No acepto**.
 El texto se edita en *Panel → Configuración* (hasta 1024 caracteres, límite de
 WhatsApp). Cada redacción distinta queda guardada como una versión nueva.
 
+## Borrado de datos
+
+Se borra **todo** lo del paciente, de una sola vez: ficha, conversación,
+glucemias, alertas, sesiones, códigos, consentimiento e intentos de
+verificación. Lo borrado se sobrescribe dentro del archivo de la base.
+
+- **El paciente**, escribiendo por WhatsApp algo como *"borrar mis datos"*. Se
+  le explica qué se borra y confirma con el botón *"Sí, borrar todo"*, que
+  vale 15 minutos. Un número que aceptó el aviso pero no llegó a verificarse
+  también puede borrar lo poco que haya de él.
+- **El administrador**, desde la ficha del paciente, escribiendo su cédula
+  para confirmar. El papel *doctor* no puede.
+
+Si el paciente tenía alertas sin revisar, **antes** de borrar se le avisa al
+doctor por WhatsApp (aunque los avisos estén apagados en Configuración), porque
+después ya no quedan en el panel. De cada borrado queda una constancia sin
+datos personales en *Panel → Seguridad*. Lo que Meta y OpenAI hayan guardado
+por su cuenta no está al alcance del sistema.
+
 ---
 
 ## Puesta en marcha

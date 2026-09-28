@@ -172,8 +172,9 @@ export function consentimientoPorDefecto({ clinica, doctor, telefono }) {
     'si algo requiere atención.\n\n' +
     '*Quién más los procesa:* WhatsApp (Meta), para los mensajes, y OpenAI, para entender ' +
     'textos, audios y fotos. Ambos tienen servidores fuera del Ecuador.\n\n' +
-    'Sus datos se guardan cifrados. Puede pedir verlos, corregirlos o eliminarlos en el ' +
-    `consultorio${contacto}. Este asistente no reemplaza una consulta ni atiende emergencias.\n\n` +
+    'Sus datos se guardan cifrados. Puede pedir verlos o corregirlos en el ' +
+    `consultorio${contacto}, y borrarlos cuando quiera escribiéndome "borrar mis datos". ` +
+    'Este asistente no reemplaza una consulta ni atiende emergencias.\n\n' +
     'Política completa: https://cemaustro.com/privacidad-asistente\n\n' +
     '¿Acepta el tratamiento de sus datos?'
   );

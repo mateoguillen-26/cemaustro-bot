@@ -111,3 +111,44 @@ async function avisarAlDoctor(paciente, alerta) {
     logger.error('No se pudo avisar al doctor ni con plantilla. La alerta queda en el panel.');
   }
 }
+
+/**
+ * Avisa al doctor que un paciente con alertas sin revisar pidió borrar sus
+ * datos. Se manda ANTES de borrar, porque después ya no queda nada en el
+ * panel que mirar.
+ *
+ * Sale aunque los avisos por WhatsApp estén apagados en Configuración: ese
+ * interruptor existe porque las alertas se pueden ver en el panel, y estas
+ * están a punto de desaparecer de ahí.
+ *
+ * @returns {Promise<boolean>} true si el aviso llegó a salir
+ */
+export async function avisarBorradoConAlertas(paciente, abiertas) {
+  const destino = config.doctor.telefono;
+  if (!destino) {
+    logger.warn('Paciente con alertas abiertas borró sus datos, pero no hay DOCTOR_TELEFONO para avisar.');
+    return false;
+  }
+
+  const telefono = paciente.phone ? `+${paciente.phone}` : 'sin número';
+  const motivos = abiertas
+    .slice(0, 3)
+    .map((a) => `• ${a.level === 'urgente' ? 'URGENTE: ' : ''}${a.reason}`)
+    .join('\n');
+
+  const texto =
+    `⚠️ Borrado de datos — ${config.clinica.nombre}\n\n` +
+    `${paciente.name} (CI ${paciente.cedula}, ${telefono}) pidió borrar todos sus datos ` +
+    `del asistente y tenía ${abiertas.length} alerta(s) sin revisar:\n${motivos}\n\n` +
+    'Sus datos ya no estarán en el panel. Si hace falta, contáctelo directamente.';
+
+  if ((await whatsapp.enviarMensaje(destino, texto)).ok) return true;
+
+  const plantilla = config.whatsapp.plantillaAlerta;
+  if (!plantilla) return false;
+
+  const resumen =
+    `Borrado de datos - ${paciente.name} (CI ${paciente.cedula}, ${telefono}) borró sus datos ` +
+    `con ${abiertas.length} alerta(s) sin revisar: ${abiertas[0].reason}`;
+  return (await whatsapp.enviarPlantilla(destino, plantilla, [resumen])).ok;
+}

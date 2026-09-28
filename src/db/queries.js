@@ -697,3 +697,83 @@ export function consentimientoDe(pacienteId) {
       .get(pacienteId) ?? null
   );
 }
+
+/* ================================================================== */
+/* Borrado de datos a pedido                                           */
+/* ================================================================== */
+
+/** Alertas del paciente que nadie ha revisado todavía. */
+export function alertasAbiertasDe(pacienteId) {
+  return obtenerDB()
+    .prepare(
+      'SELECT level, reason, created_at FROM alerts WHERE patient_id = ? AND resolved_at IS NULL ORDER BY id DESC',
+    )
+    .all(pacienteId);
+}
+
+/**
+ * Borra TODO lo de un paciente, en una sola transacción: o se borra todo o
+ * no se borra nada. Incluye lo que quedó guardado por teléfono y no por
+ * paciente (intentos de verificación, consentimientos), de todos los números
+ * que ha usado. Lo único que queda son los id de mensajes de WhatsApp ya
+ * procesados, que no dicen nada de nadie y evitan responder dos veces.
+ *
+ * @returns {number} filas borradas en total
+ */
+export function borrarDatosDePaciente(pacienteId) {
+  const db = obtenerDB();
+  const borrar = db.transaction(() => {
+    const telefonos = db
+      .prepare(
+        `SELECT phone FROM patients WHERE id = ? AND phone IS NOT NULL
+         UNION SELECT phone FROM sessions WHERE patient_id = ?
+         UNION SELECT used_by_phone FROM link_codes WHERE patient_id = ? AND used_by_phone IS NOT NULL
+         UNION SELECT phone FROM consents WHERE patient_id = ?`,
+      )
+      .pluck()
+      .all(pacienteId, pacienteId, pacienteId, pacienteId);
+
+    let filas = 0;
+    const correr = (sql, ...p) => (filas += db.prepare(sql).run(...p).changes);
+
+    for (const telefono of telefonos) {
+      correr('DELETE FROM auth_attempts WHERE phone = ?', telefono);
+      correr('DELETE FROM consents WHERE phone = ?', telefono);
+    }
+    correr('DELETE FROM consents WHERE patient_id = ?', pacienteId);
+    correr('DELETE FROM messages WHERE patient_id = ?', pacienteId);
+    correr('DELETE FROM glucose_readings WHERE patient_id = ?', pacienteId);
+    correr('DELETE FROM alerts WHERE patient_id = ?', pacienteId);
+    correr('DELETE FROM link_codes WHERE patient_id = ?', pacienteId);
+    correr('DELETE FROM sessions WHERE patient_id = ?', pacienteId);
+    correr('DELETE FROM patients WHERE id = ?', pacienteId);
+    return filas;
+  });
+  return borrar();
+}
+
+/**
+ * Borra lo que haya de un número que nunca llegó a verificarse: su
+ * consentimiento y sus intentos de verificación.
+ */
+export function borrarDatosDeTelefono(telefono) {
+  const db = obtenerDB();
+  return db.transaction(() => {
+    let filas = db.prepare('DELETE FROM consents WHERE phone = ?').run(telefono).changes;
+    filas += db.prepare('DELETE FROM auth_attempts WHERE phone = ?').run(telefono).changes;
+    return filas;
+  })();
+}
+
+/** Constancia de un borrado, sin datos personales. */
+export function registrarBorrado({ pacienteRef = null, solicitadoPor, teniaAlertas = false, doctorAvisado = null }) {
+  obtenerDB()
+    .prepare(
+      'INSERT INTO deletions (patient_ref, requested_by, had_open_alerts, doctor_notified) VALUES (?, ?, ?, ?)',
+    )
+    .run(pacienteRef, solicitadoPor, teniaAlertas ? 1 : 0, teniaAlertas ? (doctorAvisado ? 1 : 0) : null);
+}
+
+export function ultimosBorrados(limite = 50) {
+  return obtenerDB().prepare('SELECT * FROM deletions ORDER BY id DESC LIMIT ?').all(limite);
+}

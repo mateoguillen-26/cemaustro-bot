@@ -168,7 +168,7 @@ function graficoGlucemias(lecturas) {
           <p class="sub" style="font-size:12px">Últimas ${orden.length} mediciones. Pase el cursor para ver el detalle.</p>`;
 }
 
-export function paciente({ paciente: p, lecturas, resumenGlucemias, conversacion, alertas, codigo, codigoPendiente, consentimiento }) {
+export function paciente({ paciente: p, lecturas, resumenGlucemias, conversacion, alertas, codigo, codigoPendiente, consentimiento, puedeBorrar = false }) {
   const bloqueCodigo = codigo
     ? `<div class="tarjeta" style="border-color:var(--acento)">
          <b>Código de vinculación para ${esc(p.name)}</b>
@@ -323,6 +323,31 @@ export function paciente({ paciente: p, lecturas, resumenGlucemias, conversacion
     <h2>Conversación</h2>
     <div class="tarjeta">
       ${conversacion.length === 0 ? '<p class="vacio">Todavía no ha escrito.</p>' : `<div class="chat">${burbujas}</div>`}
+    </div>
+    ${puedeBorrar ? bloqueBorrado(p, alertas) : ''}`;
+}
+
+/** Zona de borrado total. Solo la ve el administrador. */
+function bloqueBorrado(p, alertas) {
+  const abiertas = alertas.filter((a) => !a.resolved_at).length;
+  return `
+    <h2>Eliminar todos los datos</h2>
+    <div class="tarjeta">
+      <p style="margin-top:0">
+        Borra <b>para siempre</b> la ficha, la conversación, las glucemias, las alertas, las sesiones,
+        el consentimiento y los intentos de verificación de este paciente. No se puede deshacer.
+        Solo queda una constancia sin datos personales (fecha y quién lo pidió).
+      </p>
+      ${
+        abiertas > 0
+          ? `<p class="aviso aviso-error">Tiene ${abiertas} alerta(s) sin revisar. Al borrar se le avisará al doctor por WhatsApp.</p>`
+          : ''
+      }
+      <form method="post" action="/admin/pacientes/${p.id}/borrar">
+        <label for="confirmar_cedula">Para confirmar, escriba la cédula del paciente</label>
+        <input type="text" id="confirmar_cedula" name="confirmar_cedula" inputmode="numeric" autocomplete="off" required>
+        <button class="peligro" type="submit">Eliminar todos los datos</button>
+      </form>
     </div>`;
 }
 
@@ -505,7 +530,7 @@ export function configuracion(valores) {
 /* Seguridad                                                           */
 /* ------------------------------------------------------------------ */
 
-export function seguridad(intentos, incidencias, advertencias, cifrada) {
+export function seguridad(intentos, incidencias, advertencias, cifrada, borrados = []) {
   const filas = intentos
     .map(
       (i) => `<tr>
@@ -560,6 +585,34 @@ export function seguridad(intentos, incidencias, advertencias, cifrada) {
       }
       <p class="sub" style="font-size:12px; margin:12px 0 0">
         Tras ${config.auth.maxIntentos} fallos, el número queda bloqueado ${config.auth.minutosDeBloqueo} minutos.
+      </p>
+    </div>
+
+    <h2>Borrados de datos</h2>
+    <div class="tarjeta">
+      ${
+        borrados.length === 0
+          ? '<p class="vacio">Nadie ha pedido borrar sus datos.</p>'
+          : `<table><thead><tr><th>Cuándo</th><th>Ficha</th><th>Pedido por</th><th>Alertas abiertas</th></tr></thead>
+             <tbody>${borrados
+               .map(
+                 (b) => `<tr>
+                   <td>${esc(fechaCorta(b.deleted_at))}</td>
+                   <td>${b.patient_ref ? `#${b.patient_ref}` : 'sin ficha'}</td>
+                   <td>${b.requested_by === 'paciente' ? 'El propio paciente (WhatsApp)' : `Panel: ${esc(b.requested_by.replace(/^panel:/, ''))}`}</td>
+                   <td>${
+                     !b.had_open_alerts
+                       ? '—'
+                       : b.doctor_notified
+                         ? 'Sí; se avisó al doctor'
+                         : '<span class="etiqueta et-urgente">Sí; NO se pudo avisar al doctor</span>'
+                   }</td>
+                 </tr>`,
+               )
+               .join('')}</tbody></table>`
+      }
+      <p class="sub" style="font-size:12px; margin:12px 0 0">
+        Constancia de que se cumplió cada pedido. No guarda cédula, nombre ni teléfono.
       </p>
     </div>
 

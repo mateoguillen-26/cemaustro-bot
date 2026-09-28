@@ -18,6 +18,7 @@ import * as db from '../db/queries.js';
 import * as whatsapp from '../services/whatsapp.js';
 import * as auth from '../services/auth.js';
 import * as consentimiento from '../services/consentimiento.js';
+import * as borrado from '../services/borrado.js';
 import * as glucemias from '../services/glucemias.js';
 import * as alertas from '../services/alertas.js';
 import { transcribirAudio } from '../services/transcription.js';
@@ -164,6 +165,11 @@ async function atenderDesconocido(telefono, mensaje, waMessageId) {
 
   whatsapp.marcarComoLeido(waMessageId).catch(() => {});
 
+  if (borrado.esBotonDeBorrado(mensaje)) {
+    await borrado.atenderBoton(mensaje, telefono, null);
+    return;
+  }
+
   // Un número nuevo tiene que aceptar el tratamiento de datos antes de dar
   // su cédula. Si acaba de aceptar, se sigue pidiéndole la cédula.
   if (consentimiento.necesitaConsentimiento(telefono)) {
@@ -185,6 +191,14 @@ async function atenderDesconocido(telefono, mensaje, waMessageId) {
   }
 
   const texto = mensaje.text?.body?.trim() ?? '';
+
+  // Lo único que puede tener guardado un número sin verificar es su
+  // consentimiento y sus intentos; también puede pedir que se borren.
+  if (borrado.pidioBorrar(texto)) {
+    await borrado.pedirConfirmacion(telefono, { conFicha: false });
+    return;
+  }
+
   const { respuesta } = auth.intentarVerificar(telefono, texto);
   await whatsapp.enviarMensaje(telefono, respuesta);
 }
@@ -202,6 +216,13 @@ async function atenderPaciente(paciente, mensaje, waMessageId) {
   db.registrarActividad(paciente.id);
   whatsapp.marcarComoLeido(waMessageId).catch(() => {});
 
+  // La confirmación de un borrado pasa aunque haya escrito mucho en la última
+  // hora: borrar sus datos es un derecho, no una conversación más.
+  if (borrado.esBotonDeBorrado(mensaje)) {
+    await borrado.atenderBoton(mensaje, paciente.phone, paciente);
+    return;
+  }
+
   if (db.mensajesRecientesDe(paciente.id) >= MAX_MENSAJES_POR_HORA) {
     logger.warn(`Paciente #${paciente.id} superó el límite de mensajes por hora.`);
     await responder(
@@ -218,6 +239,12 @@ async function atenderPaciente(paciente, mensaje, waMessageId) {
   if (texto === null) return; // ya se le respondió el problema
 
   // --- 2) Casos que no necesitan al modelo ---
+  // El pedido de borrado no se guarda en la conversación: se va a borrar.
+  if (borrado.pidioBorrar(texto)) {
+    await borrado.pedirConfirmacion(paciente.phone, { conFicha: true });
+    return;
+  }
+
   if (auth.pidioCerrarSesion(texto)) {
     await responder(paciente, auth.cerrarSesion(paciente), false);
     return;

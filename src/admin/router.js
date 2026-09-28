@@ -31,6 +31,7 @@ import * as paginas from './paginas.js';
 import * as db from '../db/queries.js';
 import { baseCifrada } from '../db/database.js';
 import * as auth from '../services/auth.js';
+import * as borrado from '../services/borrado.js';
 import * as conocimiento from '../services/conocimiento.js';
 import {
   extraerTexto,
@@ -240,7 +241,7 @@ function fichaDe(pacienteId, extras = {}) {
 }
 
 adminRouter.get('/pacientes/:id', (req, res) => {
-  const contenido = fichaDe(Number(req.params.id));
+  const contenido = fichaDe(Number(req.params.id), { puedeBorrar: esAdministrador(req.usuario) });
   if (!contenido) return res.status(404).send('Paciente no encontrado.');
 
   res.type('html').send(
@@ -304,7 +305,7 @@ adminRouter.post('/pacientes/:id/codigo', (req, res) => {
       activo: '/admin/pacientes',
       aviso: { tipo: 'ok', texto: 'Código generado. Anótelo ahora: no se vuelve a mostrar.' },
       usuario: req.usuario,
-      contenido: fichaDe(id, { codigo }),
+      contenido: fichaDe(id, { codigo, puedeBorrar: esAdministrador(req.usuario) }),
     }),
   );
 });
@@ -320,6 +321,46 @@ adminRouter.post('/pacientes/:id/revocar', (req, res) => {
     tipo: 'ok',
     texto: cerradas > 0 ? 'Sesión cerrada. Tendrá que verificarse de nuevo.' : 'No tenía sesión abierta.',
   });
+});
+
+adminRouter.post('/pacientes/:id/borrar', async (req, res) => {
+  // Solo el administrador. Se comprueba aquí y no con guardaDeSecciones
+  // porque el resto de /pacientes sí es del doctor.
+  if (!esAdministrador(req.usuario)) {
+    logger.warn(`"${req.usuario.username}" intentó borrar un paciente sin ser administrador.`);
+    return res.status(403).send('Solo un administrador puede borrar los datos de un paciente.');
+  }
+
+  const id = Number(req.params.id);
+  const paciente = db.obtenerPaciente(id);
+  if (!paciente) return res.status(404).send('Paciente no encontrado.');
+
+  if (normalizarCedula(req.body.confirmar_cedula) !== paciente.cedula) {
+    return volver(res, `/admin/pacientes/${id}`, {
+      tipo: 'error',
+      texto: 'La cédula escrita no coincide con la del paciente. No se borró nada.',
+    });
+  }
+
+  try {
+    const { teniaAlertas, doctorAvisado } = await borrado.borrarPaciente(
+      paciente,
+      `panel:${req.usuario.username}`,
+    );
+    let texto = 'Todos los datos del paciente fueron eliminados.';
+    if (teniaAlertas) {
+      texto += doctorAvisado
+        ? ' Tenía alertas sin revisar: se le avisó al doctor por WhatsApp.'
+        : ' Tenía alertas sin revisar y NO se pudo avisar al doctor por WhatsApp.';
+    }
+    return volver(res, '/admin/pacientes', { tipo: teniaAlertas && !doctorAvisado ? 'error' : 'ok', texto });
+  } catch (error) {
+    logger.error(`No se pudieron borrar los datos del paciente #${id}.`, error);
+    return volver(res, `/admin/pacientes/${id}`, {
+      tipo: 'error',
+      texto: 'No se pudo borrar. No se eliminó nada; inténtelo de nuevo.',
+    });
+  }
 });
 
 /* ------------------------------------------------------------------ */
@@ -483,6 +524,7 @@ adminRouter.get('/seguridad', (req, res) => {
           ? advertenciasDeConfiguracion().filter((a) => !a.startsWith('ADMIN_USER'))
           : [...advertenciasDeConfiguracion(), 'No hay ningún usuario con acceso al panel.'],
         baseCifrada(),
+        db.ultimosBorrados(30),
       ),
     }),
   );

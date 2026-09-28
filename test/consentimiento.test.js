@@ -1,93 +1,22 @@
 /**
- * Recorre el consentimiento por el webhook de verdad: los mensajes entran
- * firmados como los manda Meta, y lo que el bot envía lo recibe un WhatsApp
- * de mentira levantado aquí mismo. Nada sale a internet.
+ * Recorre el consentimiento por el webhook de verdad (ver ayudas/bot.js).
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import crypto from 'node:crypto';
-import fs from 'node:fs';
-import http from 'node:http';
-import os from 'node:os';
-import path from 'node:path';
+import { levantarBot, texto, boton } from './ayudas/bot.js';
 
-const carpeta = fs.mkdtempSync(path.join(os.tmpdir(), 'cemaustro-consentimiento-'));
-const SECRETO = 'secreto-de-prueba';
-const PUERTO_BOT = 3217;
-const PUERTO_WHATSAPP = 3218;
-
-Object.assign(process.env, {
-  DATABASE_PATH: path.join(carpeta, 'prueba.db'),
-  DB_ENCRYPTION_KEY: 'clave-de-prueba-0123456789abcdef-0123456789',
-  LOG_CONSOLE: 'false',
-  LOG_FILE: path.join(carpeta, 'prueba.log'),
-  PORT: String(PUERTO_BOT),
-  WHATSAPP_APP_SECRET: SECRETO,
-  WHATSAPP_TOKEN: 'token-de-prueba',
-  WHATSAPP_PHONE_NUMBER_ID: '123',
-  WHATSAPP_BASE_URL: `http://127.0.0.1:${PUERTO_WHATSAPP}`,
-  CLINICA_TELEFONO: '+593 99 000 0000',
-});
-
-/* --- WhatsApp de mentira: guarda cada envío --- */
-const enviados = [];
-const whatsappFalso = http.createServer((req, res) => {
-  let cuerpo = '';
-  req.on('data', (d) => (cuerpo += d));
-  req.on('end', () => {
-    const json = JSON.parse(cuerpo || '{}');
-    if (json.type) enviados.push(json); // los "leído" no traen type
-    res.setHeader('content-type', 'application/json');
-    res.end('{"messages":[{"id":"wamid.salida"}]}');
-  });
-});
-
+let bot;
 let db;
 let queries;
-let servidor;
+let llega;
 
 before(async () => {
-  await new Promise((r) => whatsappFalso.listen(PUERTO_WHATSAPP, '127.0.0.1', r));
-  ({ servidor } = await import('../src/index.js'));
-  await new Promise((r) => setTimeout(r, 300));
-  db = (await import('../src/db/database.js')).obtenerDB();
-  queries = await import('../src/db/queries.js');
+  bot = await levantarBot({ puertoBot: 3217, puertoWhatsapp: 3218 });
+  ({ db, queries, llega } = bot);
 });
 
-after(async () => {
-  whatsappFalso.close();
-  servidor?.close();
-  (await import('../src/db/database.js')).cerrarDB();
-  fs.rmSync(carpeta, { recursive: true, force: true });
-});
+after(() => bot.cerrar());
 
-/* --- Ayudas --- */
-let contador = 0;
-
-/** Manda un mensaje al webhook como lo haría Meta y espera lo que responda el bot. */
-async function llega(telefono, contenido) {
-  const antes = enviados.length;
-  const mensaje = { from: telefono, id: `wamid.prueba.${++contador}`, timestamp: '0', ...contenido };
-  const cuerpo = JSON.stringify({
-    object: 'whatsapp_business_account',
-    entry: [{ changes: [{ value: { messages: [mensaje] } }] }],
-  });
-  const firma = crypto.createHmac('sha256', SECRETO).update(cuerpo).digest('hex');
-  const r = await fetch(`http://127.0.0.1:${PUERTO_BOT}/webhook`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-hub-signature-256': `sha256=${firma}` },
-    body: cuerpo,
-  });
-  assert.equal(r.status, 200);
-
-  for (let i = 0; i < 100 && enviados.length === antes; i++) {
-    await new Promise((r) => setTimeout(r, 20));
-  }
-  return enviados.slice(antes);
-}
-
-const texto = (body) => ({ type: 'text', text: { body } });
-const boton = (id, title) => ({ type: 'interactive', interactive: { type: 'button_reply', button_reply: { id, title } } });
 const cuenta = (tabla, donde = '1=1', ...p) =>
   db.prepare(`SELECT COUNT(*) FROM ${tabla} WHERE ${donde}`).pluck().get(...p);
 
@@ -132,7 +61,7 @@ test('"Acepto" guarda la aceptación con su versión y pasa a pedir la cédula',
   const fila = db.prepare('SELECT * FROM consents WHERE phone = ?').get(NUEVO);
   assert.equal(fila.text_version, 1);
   assert.equal(fila.patient_id, null);
-  assert.equal(fila.wa_message_id, `wamid.prueba.${contador}`);
+  assert.equal(fila.wa_message_id, bot.ultimoId());
   assert.match(
     db.prepare('SELECT text FROM consent_texts WHERE version = 1').pluck().get(),
     /Antes de empezar: sus datos/,

@@ -285,6 +285,23 @@ const MIGRACIONES = [
       CREATE INDEX IF NOT EXISTS idx_consents_patient ON consents (patient_id);
     `,
   },
+  {
+    version: 10,
+    nombre: 'constancias de borrado',
+    sql: `
+      -- Prueba de que se cumplió una solicitud de borrado, SIN datos
+      -- personales: ni cédula, ni nombre, ni teléfono. Solo el número interno
+      -- que tenía la ficha, quién lo pidió y cuándo.
+      CREATE TABLE IF NOT EXISTS deletions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          patient_ref INTEGER,                -- id que tenía la ficha; NULL si no llegó a tener
+          requested_by TEXT NOT NULL,         -- 'paciente' | 'panel:<usuario>'
+          had_open_alerts INTEGER NOT NULL DEFAULT 0,
+          doctor_notified INTEGER,            -- si tenía alertas: ¿llegó el aviso al doctor?
+          deleted_at DATETIME DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+    `,
+  },
 ];
 
 /** Aplica las migraciones que falten. Devuelve la versión final del esquema. */

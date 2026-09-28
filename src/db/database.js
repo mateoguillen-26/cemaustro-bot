@@ -181,6 +181,9 @@ export function obtenerDB() {
 
   conexion.pragma('journal_mode = WAL'); // mejor concurrencia lectura/escritura
   conexion.pragma('foreign_keys = ON');
+  // Lo que se borra se sobrescribe con ceros en lugar de quedar en páginas
+  // libres del archivo: un borrado a pedido del paciente tiene que ser real.
+  conexion.pragma('secure_delete = ON');
   db = conexion;
 
   logger.info(`Base de datos conectada${clave ? ' (cifrada)' : ' (SIN cifrar)'}: ${ruta}`);
