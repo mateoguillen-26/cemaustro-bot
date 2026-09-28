@@ -500,7 +500,7 @@ export function configuracion(valores) {
 /* Seguridad                                                           */
 /* ------------------------------------------------------------------ */
 
-export function seguridad(intentos, incidencias, advertencias) {
+export function seguridad(intentos, incidencias, advertencias, cifrada) {
   const filas = intentos
     .map(
       (i) => `<tr>
@@ -530,6 +530,11 @@ export function seguridad(intentos, incidencias, advertencias) {
   return `
     <h1>Seguridad</h1>
     <p class="sub">Quién intentó entrar y qué le está fallando al servidor.</p>
+    <p>Base de datos: ${
+      cifrada
+        ? '<span class="etiqueta et-ok">Cifrada</span>'
+        : '<span class="etiqueta et-urgente">Sin cifrar</span>'
+    }</p>
 
     ${
       advertencias.length > 0

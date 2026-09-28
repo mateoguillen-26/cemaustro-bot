@@ -1,6 +1,7 @@
-FROM node:20-slim
+FROM node:24-slim
 
-# better-sqlite3 se compila al instalar: hacen falta las herramientas de build.
+# better-sqlite3-multiple-ciphers trae binario ya compilado para Node 24; las
+# herramientas de build quedan por si alguna vez hay que compilarlo.
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 

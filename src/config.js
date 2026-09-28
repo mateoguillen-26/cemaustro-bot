@@ -77,6 +77,13 @@ export const config = {
   // --- Base de datos ---
   db: {
     ruta: path.resolve(env('DATABASE_PATH', './data/cemaustro.db')),
+    /**
+     * Clave con la que se cifra el archivo de la base. SI SE PIERDE, LOS
+     * DATOS NO SE PUEDEN RECUPERAR: guárdela también fuera del servidor.
+     */
+    clave: env('DB_ENCRYPTION_KEY', ''),
+    /** En producción no se arranca con la base sin cifrar. */
+    exigirCifrado: env('NODE_ENV', 'development') === 'production',
   },
 
   /**
@@ -237,6 +244,14 @@ export function advertenciasDeConfiguracion() {
   }
   if (!config.doctor.telefono) {
     avisos.push('DOCTOR_TELEFONO vacío: las alertas se guardan pero no se le avisan por WhatsApp.');
+  }
+  if (!config.db.clave) {
+    avisos.push(
+      'DB_ENCRYPTION_KEY vacío: la base de datos se guarda SIN cifrar. ' +
+        'Cualquiera con una copia del archivo puede leer cédulas y conversaciones.',
+    );
+  } else if (config.db.clave.length < 32) {
+    avisos.push('DB_ENCRYPTION_KEY es corta. Use al menos 32 caracteres (openssl rand -hex 32).');
   }
   return avisos;
 }

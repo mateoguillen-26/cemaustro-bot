@@ -95,11 +95,19 @@ npm run migrate
 npm start
 ```
 
-Genere una sal única para `AUTH_PEPPER`:
+Genere una sal única para `AUTH_PEPPER`, y otra distinta para
+`DB_ENCRYPTION_KEY`, con:
 
 ```bash
 openssl rand -hex 32
 ```
+
+`DB_ENCRYPTION_KEY` cifra el archivo de la base entera (formato SQLCipher 4,
+el que abre DB Browser for SQLite). **Si se pierde, los datos no se pueden
+recuperar**: guarde una copia fuera del servidor. Una base que estaba sin
+cifrar se cifra sola la primera vez que el servidor arranca con clave: se hace
+sobre una copia, se comprueba fila por fila y solo entonces reemplaza al
+original. En producción el servidor no arranca sin clave.
 
 El servidor queda en el puerto 3000: webhook en `/webhook`, panel en `/admin`.
 En desarrollo, exponga el puerto con `ngrok http 3000` y use esa URL en Meta.
@@ -265,4 +273,6 @@ piezas de configuración que quedaron flojas.
   entregue el mensaje y de que alguien lo lea. Al paciente siempre se le dice
   que acuda a emergencias.
 - **Datos sensibles.** La base guarda cédulas, conversaciones y valores de
-  salud. Cífrela en reposo, respalde con cuidado y no exponga `/admin` sin TLS.
+  salud. Va cifrada con `DB_ENCRYPTION_KEY`, lo que protege el archivo y sus
+  respaldos, pero no a quien tenga acceso al servidor o a sus variables (ahí
+  está la clave). No exponga `/admin` sin TLS.

@@ -29,6 +29,7 @@ import {
 import { pagina, paginaEntrar } from './vistas.js';
 import * as paginas from './paginas.js';
 import * as db from '../db/queries.js';
+import { baseCifrada } from '../db/database.js';
 import * as auth from '../services/auth.js';
 import * as conocimiento from '../services/conocimiento.js';
 import {
@@ -480,6 +481,7 @@ adminRouter.get('/seguridad', (req, res) => {
         db.contarUsuariosPanel() > 0
           ? advertenciasDeConfiguracion().filter((a) => !a.startsWith('ADMIN_USER'))
           : [...advertenciasDeConfiguracion(), 'No hay ningún usuario con acceso al panel.'],
+        baseCifrada(),
       ),
     }),
   );
