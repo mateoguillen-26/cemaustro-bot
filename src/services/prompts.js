@@ -155,28 +155,19 @@ export const TEXTOS_POR_DEFECTO = {
 
 /**
  * Aviso de consentimiento: lo primero que recibe un número nuevo, con los
- * botones Acepto / No acepto. BORRADOR: debe revisarlo alguien del
- * consultorio o un abogado (LOPDP) antes de darlo por definitivo.
+ * botones Acepto / No acepto. Corto a propósito: el detalle (qué datos, para
+ * qué, quién más los procesa, cómo borrarlos) está en la página enlazada.
+ * Debe revisarlo alguien del consultorio o un abogado (LOPDP).
  *
  * WhatsApp admite hasta 1024 caracteres en un mensaje con botones.
  * Recibe los datos del consultorio porque este archivo no importa nada.
  */
-export function consentimientoPorDefecto({ clinica, doctor, telefono }) {
-  const contacto = telefono ? ` o al ${telefono}` : '';
+export function consentimientoPorDefecto({ clinica }) {
   return (
-    '🔒 *Antes de empezar: sus datos*\n\n' +
-    `Soy el asistente de diabetes de ${clinica}. Para atenderle necesito tratar datos ` +
-    'personales y de salud: su cédula, su número, lo que me escriba o envíe (textos, ' +
-    'audios, fotos) y sus glucemias.\n\n' +
-    `*Para qué:* darle información sobre diabetes, registrar sus valores y avisar a ${doctor} ` +
-    'si algo requiere atención.\n\n' +
-    '*Quién más los procesa:* WhatsApp (Meta), para los mensajes, y OpenAI, para entender ' +
-    'textos, audios y fotos. Ambos tienen servidores fuera del Ecuador.\n\n' +
-    'Sus datos se guardan cifrados. Puede pedir verlos o corregirlos en el ' +
-    `consultorio${contacto}, y borrarlos cuando quiera escribiéndome "borrar mis datos". ` +
-    'Este asistente no reemplaza una consulta ni atiende emergencias.\n\n' +
-    'Política completa: https://cemaustro.com/privacidad-asistente\n\n' +
-    '¿Acepta el tratamiento de sus datos?'
+    `Hola 👋 Soy el asistente de diabetes de ${clinica}.\n\n` +
+    'Para continuar, necesito que acepte los *términos y condiciones* y la ' +
+    '*política de tratamiento de datos*.\n\n' +
+    '📄 Léalos aquí: https://cemaustro.com/privacidad-asistente'
   );
 }
 

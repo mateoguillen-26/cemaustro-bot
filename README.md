@@ -46,10 +46,12 @@ La sesión dura 90 días (configurable). El doctor puede cerrarla desde el panel
 en cualquier momento, y desactivar a un paciente le corta el acceso en el
 siguiente mensaje.
 
-**Contra la enumeración.** Todos los fallos responden exactamente lo mismo. Ni
-la cédula ni el código revelan si esa persona se atiende en el consultorio:
-saber quién va al diabetólogo ya es información de salud. Tras 5 intentos
-fallidos el número queda bloqueado una hora.
+**Mensajes de error.** Una cédula mal escrita y una cédula que no está en el
+padrón reciben mensajes distintos, por decisión del consultorio. Ojo: eso
+permite averiguar, escribiendo la cédula de alguien, si esa persona se atiende
+en el consultorio (información de salud). Lo frena el bloqueo: tras 5 intentos
+fallidos el número queda bloqueado una hora. Un código equivocado, vencido o
+ya usado responde siempre lo mismo.
 
 ---
 

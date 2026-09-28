@@ -134,7 +134,7 @@ test('"Sí, borrar todo" avisa al doctor de la alerta abierta, borra todo y lo c
 test('después del borrado, el número empieza de cero (le llega el aviso de datos)', async () => {
   const [salida] = await llega(TEL, texto('Hola'));
   assert.equal(salida.type, 'interactive');
-  assert.match(salida.interactive.body.text, /sus datos/);
+  assert.match(salida.interactive.body.text, /política de tratamiento de datos/);
   assert.equal(cuenta('consents', 'phone = ?', TEL), 0);
 });
 

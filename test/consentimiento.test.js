@@ -26,7 +26,7 @@ const NUEVO = '593990000001';
 test('un número nuevo recibe primero el aviso con los botones, y nada más', async () => {
   const [salida] = await llega(NUEVO, texto('Hola'));
   assert.equal(salida.type, 'interactive');
-  assert.match(salida.interactive.body.text, /Antes de empezar: sus datos/);
+  assert.match(salida.interactive.body.text, /política de tratamiento de datos/);
   assert.ok(salida.interactive.body.text.length <= 1024);
   const botones = salida.interactive.action.buttons.map((b) => b.reply);
   assert.deepEqual(botones.map((b) => b.title), ['Acepto', 'No acepto']);
@@ -64,7 +64,7 @@ test('"Acepto" guarda la aceptación con su versión y pasa a pedir la cédula',
   assert.equal(fila.wa_message_id, bot.ultimoId());
   assert.match(
     db.prepare('SELECT text FROM consent_texts WHERE version = 1').pluck().get(),
-    /Antes de empezar: sus datos/,
+    /política de tratamiento de datos/,
   );
 });
 

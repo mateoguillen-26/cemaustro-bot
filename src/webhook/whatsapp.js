@@ -175,8 +175,7 @@ async function atenderDesconocido(telefono, mensaje, waMessageId) {
   if (consentimiento.necesitaConsentimiento(telefono)) {
     const acepto = await consentimiento.atender(telefono, mensaje);
     if (acepto) {
-      const { respuesta } = auth.intentarVerificar(telefono, '');
-      await whatsapp.enviarMensaje(telefono, respuesta);
+      await whatsapp.enviarMensaje(telefono, auth.respuestaTrasAceptar(telefono));
     }
     return;
   }

@@ -17,9 +17,12 @@
  * el que escriben no verifica nada — quien tiene el teléfono recibiría el
  * código. El código vale justamente porque viaja por otro canal (la consulta).
  *
- * Contra la enumeración: las respuestas de fallo son siempre iguales. Ni la
- * cédula ni el código revelan si esa persona es paciente del consultorio,
- * porque saber quién se atiende con un diabetólogo ya es información de salud.
+ * Una cédula que no está en el padrón recibe un mensaje propio ("no está
+ * registrada"), por decisión del consultorio (09/2026). Ojo: eso permite
+ * averiguar desde afuera si alguien es paciente, y saber quién se atiende con
+ * un diabetólogo ya es información de salud. Lo que lo frena es el bloqueo
+ * tras varios intentos fallidos. El código equivocado sí responde siempre
+ * igual, sea cual sea la causa.
  */
 import crypto from 'node:crypto';
 import { config } from '../config.js';
@@ -45,6 +48,11 @@ const MENSAJES = {
     'Antes de poder ayudarle necesito confirmar que usted es paciente del consultorio.\n\n' +
     'Por favor, escríbame *su número de cédula* (10 dígitos).',
 
+  // Tras aceptar el aviso de datos: el saludo ya se dio en el aviso.
+  pedirCedulaTrasAceptar: () =>
+    'Gracias ✅\n\n' +
+    'Para confirmar que es paciente del consultorio, escríbame *su número de cédula* (10 dígitos).',
+
   pedirCodigo: () =>
     'Gracias. Este número todavía no está vinculado a una historia clínica.\n\n' +
     `Escríbame de nuevo su cédula junto con el *código de 6 dígitos* que le entregó el ${config.clinica.doctor} en la consulta.\n\n` +
@@ -56,9 +64,13 @@ const MENSAJES = {
   cedulaMalFormada: () =>
     'Ese número de cédula no parece correcto. Son 10 dígitos, sin puntos ni guiones. ¿Me lo puede escribir de nuevo?',
 
-  // Una sola respuesta para "no está en el padrón", "está de baja" y "código
-  // equivocado". Cualquier diferencia entre ellas permitiría averiguar desde
-  // afuera quién es paciente del consultorio.
+  noRegistrada: () =>
+    `Esa cédula no está registrada en la plataforma. Este asistente es solo para pacientes de ${config.clinica.nombre}.\n\n` +
+    (config.clinica.telefonoContacto
+      ? `Si cree que es un error, comuníquese con el consultorio: ${config.clinica.telefonoContacto}`
+      : 'Si cree que es un error, comuníquese con el consultorio.'),
+
+  // Código equivocado, vencido o ya usado: una sola respuesta para los tres.
   noSePudo: () =>
     'No pude verificar esos datos.\n\n' +
     'Revise que la cédula y el código estén bien escritos. ' +
@@ -187,8 +199,12 @@ export function intentarVerificar(telefono, texto) {
 
   if (!cedula) {
     // Puede ser el primer "hola" o una cédula mal escrita. Si el mensaje trae
-    // una tira larga de dígitos, es lo segundo y conviene decirlo.
-    const pareceIntento = /\d{8,}/.test(texto ?? '');
+    // una tira de 7 o más dígitos (aunque vengan con puntos, guiones o
+    // espacios), es lo segundo y conviene decirlo. Con 6 puede ser un código
+    // de vinculación suelto: ahí se le pide la cédula.
+    const pareceIntento = (String(texto ?? '').match(/\d[\d.\-\s]*\d/g) ?? []).some(
+      (tira) => tira.replace(/\D/g, '').length >= 7,
+    );
     if (pareceIntento) {
       db.registrarIntento(telefono, null, 'fallo', 'cédula con formato inválido');
       return {
@@ -208,18 +224,21 @@ export function intentarVerificar(telefono, texto) {
     return verificar(paciente, telefono, enmascarada, 'teléfono ya registrado');
   }
 
+  // --- La cédula no está en el padrón activo ---
+  // Decisión del consultorio (09/2026): decirlo con claridad. Tiene un costo:
+  // desde cualquier número se puede averiguar si una cédula es de un paciente.
+  // Lo frena el bloqueo tras varios intentos fallidos, porque cada consulta
+  // así cuenta como uno.
+  if (!paciente || !paciente.active) {
+    db.registrarIntento(telefono, enmascarada, 'fallo', 'la cédula no está en el padrón activo');
+    return { resultado: RESULTADO.PENDIENTE, paciente: null, respuesta: MENSAJES.noRegistrada() };
+  }
+
   // --- Camino B: hace falta el código de vinculación ---
   const codigo = extraerCodigo(texto);
 
   if (!codigo) {
-    // Se pide el código sin importar si la cédula existe: responder distinto
-    // aquí delataría quién es paciente del consultorio.
     return { resultado: RESULTADO.PENDIENTE, paciente: null, respuesta: MENSAJES.pedirCodigo() };
-  }
-
-  if (!paciente || !paciente.active) {
-    db.registrarIntento(telefono, enmascarada, 'fallo', 'la cédula no está en el padrón activo');
-    return { resultado: RESULTADO.PENDIENTE, paciente: null, respuesta: MENSAJES.noSePudo() };
   }
 
   const emitido = db.codigoVigente(paciente.id, resumirCodigo(paciente.id, codigo));
@@ -257,4 +276,9 @@ function verificar(paciente, telefono, cedulaEnmascarada, via) {
     paciente,
     respuesta: MENSAJES.bienvenida(paciente),
   };
+}
+
+/** Lo que se le responde justo después de aceptar el aviso de datos. */
+export function respuestaTrasAceptar(telefono) {
+  return estaBloqueado(telefono) ? MENSAJES.bloqueado() : MENSAJES.pedirCedulaTrasAceptar();
 }
