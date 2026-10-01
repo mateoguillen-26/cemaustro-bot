@@ -15,7 +15,8 @@
     "importar-docs": "node src/scripts/importarDocs.js",
     "importar-pacientes": "node src/scripts/importarPacientes.js",
     "restablecer-password": "node src/scripts/restablecerPassword.js",
-    "foto-perfil": "node src/scripts/fotoPerfil.js"
+    "foto-perfil": "node src/scripts/fotoPerfil.js",
+    "qr-contacto": "node src/scripts/qrContacto.js"
   },
   "keywords": [
     "whatsapp",
