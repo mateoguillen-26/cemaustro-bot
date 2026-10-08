@@ -40,3 +40,28 @@ export function normalizarTelefono(valor) {
 export function esTelefonoValido(telefono) {
   return /^[1-9]\d{7,14}$/.test(String(telefono ?? ''));
 }
+
+/**
+ * Cómo lo lee la gente: un celular ecuatoriano en formato local
+ * (593991234567 -> 0991234567). Cualquier otro número, con su '+'.
+ */
+export function comoLocal(telefono) {
+  const digitos = String(telefono ?? '').replace(/[^0-9]/g, '');
+  if (!digitos) return '';
+  if (/^5939\d{8}$/.test(digitos)) return `0${digitos.slice(3)}`;
+  return `+${digitos}`;
+}
+
+/**
+ * Las formas en que un número puede estar escrito en la base, a partir de lo
+ * que alguien escribe en un buscador: 0991234567 también se busca como
+ * 593991234567 y al revés. Devuelve solo dígitos.
+ */
+export function variantesDeTelefono(busqueda) {
+  const digitos = String(busqueda ?? '').replace(/[^0-9]/g, '');
+  if (digitos.length < 4) return [];
+  const variantes = new Set([digitos]);
+  if (/^09/.test(digitos)) variantes.add(`593${digitos.slice(1)}`);
+  if (/^5939/.test(digitos)) variantes.add(`0${digitos.slice(3)}`);
+  return [...variantes];
+}

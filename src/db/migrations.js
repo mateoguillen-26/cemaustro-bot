@@ -314,6 +314,52 @@ const MIGRACIONES = [
       ALTER TABLE patients ADD COLUMN other_conditions TEXT;
     `,
   },
+  {
+    version: 12,
+    nombre: 'historial de cambios',
+    sql: `
+      -- Quién hizo qué y cuándo: cada cambio desde el panel (con el usuario
+      -- que lo hizo) y lo que el propio bot decide sobre un número
+      -- (verificarlo, cerrarle la sesión). Nace de un caso real: un teléfono
+      -- cambiado en una ficha que nadie supo explicar después.
+      --
+      -- Sin clave foránea a patients a propósito: el borrado total quita a
+      -- mano las filas del paciente, y la constancia del propio borrado tiene
+      -- que poder quedar aunque la ficha ya no exista.
+      CREATE TABLE IF NOT EXISTS audit_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          actor TEXT NOT NULL,                -- 'panel:<usuario>' | 'paciente' | 'sistema'
+          action TEXT NOT NULL,               -- 'paciente.telefono', 'sesion.verificada'...
+          patient_id INTEGER,
+          detail TEXT,
+          created_at DATETIME DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_audit_paciente ON audit_log (patient_id, id DESC);
+      CREATE INDEX IF NOT EXISTS idx_audit_fecha ON audit_log (created_at);
+    `,
+  },
+  {
+    version: 13,
+    nombre: 'archivo original de los documentos',
+    sql: `
+      -- El PDF o Word tal como se subió, para poder volver a verlo o
+      -- descargarlo. El asistente no lo usa: trabaja con el texto revisado de
+      -- documents.content. Mientras el doctor revisa el texto, el archivo
+      -- espera aquí sin documento (document_id NULL) y con un token; si no se
+      -- guarda, se descarta al día siguiente.
+      CREATE TABLE IF NOT EXISTS document_files (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          document_id INTEGER UNIQUE REFERENCES documents(id) ON DELETE CASCADE,
+          token TEXT UNIQUE,
+          filename TEXT NOT NULL,
+          mime TEXT NOT NULL,
+          size INTEGER NOT NULL,
+          data BLOB NOT NULL,
+          created_at DATETIME DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+    `,
+  },
 ];
 
 /**

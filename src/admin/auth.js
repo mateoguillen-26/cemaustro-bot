@@ -150,7 +150,7 @@ export const ETIQUETA_ROL = {
 };
 
 /** Secciones reservadas al administrador (rutas dentro de /admin). */
-export const SECCIONES_DE_ADMIN = ['/configuracion', '/usuarios', '/seguridad'];
+export const SECCIONES_DE_ADMIN = ['/configuracion', '/usuarios', '/seguridad', '/historial'];
 
 export function esAdministrador(usuario) {
   return usuario?.role === ROLES.ADMINISTRADOR;

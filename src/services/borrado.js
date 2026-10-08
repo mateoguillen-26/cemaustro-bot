@@ -21,6 +21,7 @@ import * as db from '../db/queries.js';
 import * as whatsapp from './whatsapp.js';
 import * as alertas from './alertas.js';
 import { logger, ofuscarTelefono } from '../utils/logger.js';
+import { anotar } from './bitacora.js';
 
 const BOTON_SI = 'borrado:si';
 const BOTON_CANCELAR = 'borrado:cancelar';
@@ -156,6 +157,9 @@ export async function borrarPaciente(paciente, solicitadoPor) {
     teniaAlertas: abiertas.length > 0,
     doctorAvisado,
   });
+  // Sin paciente: su historial se acaba de borrar con todo lo demás. Queda
+  // solo que la ficha #N se borró, quién lo pidió y cuándo.
+  anotar({ actor: solicitadoPor, accion: 'paciente.borrado', detalle: `Ficha #${paciente.id}` });
 
   logger.info(
     `Datos del paciente #${paciente.id} borrados a pedido de ${solicitadoPor} ` +

@@ -80,9 +80,15 @@ const ESTILOS = `
   .et-gris { background: #eef0f3; color: var(--suave); }
   label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 4px; }
   label small { display: block; font-weight: 400; color: var(--suave); margin-top: 2px; }
-  input[type=text], input[type=number], select, textarea {
+  input[type=text], input[type=number], input[type=date], select, textarea {
     width: 100%; padding: 9px 11px; border: 1px solid var(--borde);
     border-radius: 7px; font: inherit; background: #fff;
+  }
+  input[readonly] { background: var(--fondo); color: var(--suave); }
+  table.claves th { width: 190px; text-transform: none; letter-spacing: 0; font-size: 13px; }
+  .texto-doc {
+    white-space: pre-wrap; font-size: 14px; line-height: 1.55; max-height: 640px;
+    overflow-y: auto; margin: 0; font-family: inherit;
   }
   textarea { min-height: 120px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
   button {
@@ -167,6 +173,7 @@ const SECCIONES = [
   { ruta: '/admin/conocimiento', etiqueta: 'Conocimiento' },
   { ruta: '/admin/configuracion', etiqueta: 'Configuración', soloAdmin: true },
   { ruta: '/admin/usuarios', etiqueta: 'Usuarios', soloAdmin: true },
+  { ruta: '/admin/historial', etiqueta: 'Historial', soloAdmin: true },
   { ruta: '/admin/seguridad', etiqueta: 'Seguridad', soloAdmin: true },
 ];
 

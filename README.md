@@ -196,17 +196,18 @@ Separe los temas con una línea en blanco: así se parten mejor y se buscan mejo
 | Sección | Para qué |
 |---|---|
 | **Resumen** | Métricas del día y alertas sin revisar. |
-| **Pacientes** | El padrón. Agregar, editar, código de vinculación, cierre de sesión. La ficha guarda edad, alergias alimenticias, medicamentos y otras enfermedades (solo para el equipo: el asistente no los usa) y muestra glucemias con gráfico, alertas y la conversación. |
+| **Pacientes** | El padrón. Agregar, editar, código de vinculación, cierre de sesión. Cambiar el teléfono de un paciente verificado, o desactivarlo, pide confirmación porque le corta el acceso. La ficha muestra desde qué número se verificó y quién cerró su sesión, y su propio historial. La ficha guarda edad, alergias alimenticias, medicamentos y otras enfermedades (solo para el equipo: el asistente no los usa) y muestra glucemias con gráfico, alertas y la conversación. |
 | **Alertas** | Todo lo que el bot marcó para que el doctor lo mire, con el fragmento que lo disparó. |
-| **Conocimiento** | Documentos: subir, encender/apagar, reindexar, borrar. |
+| **Conocimiento** | Documentos: subir, ver, descargar (el texto, y el archivo original si se subió como PDF o Word), encender/apagar, reindexar, borrar. |
 | **Configuración** | Las instrucciones clínicas del asistente y los textos fijos, editables en caliente sin reiniciar. |
 | **Seguridad** | Intentos de verificación (cédulas enmascaradas) y errores recientes del servidor. |
+| **Historial** | Quién hizo qué y cuándo: cada cambio del panel con su usuario, verificaciones y cierres de sesión, e intentos de verificación. Se busca por nombre, cédula o teléfono, por usuario, por tipo y por fechas. |
 
 El panel va protegido con usuario y contraseña. **Si no los configura, no se
 sirve**: muestra cédulas y datos de salud, y no puede quedar abierto por
 descuido.
 
-Hay dos papeles: **administrador** (ve todo) y **doctor** (pacientes, alertas y
+Hay dos papeles: **administrador** (ve todo, incluidos Historial y Seguridad) y **doctor** (pacientes, alertas y
 conocimiento). Los usuarios se crean desde **Usuarios**, y desde ahí mismo un
 administrador puede restablecer la contraseña de cualquier otro. Si el único
 administrador olvida la suya, se restablece desde el servidor:
@@ -218,6 +219,9 @@ npm run restablecer-password -- jefe
 Sin más argumentos inventa una contraseña provisional y la muestra una sola
 vez; también puede indicarla como segundo argumento. Las sesiones abiertas de
 ese usuario se cierran solas.
+
+Los casos reales que hubo que investigar, con lo que pasó y cómo se resolvió,
+están en [`casos/`](casos/).
 
 ---
 

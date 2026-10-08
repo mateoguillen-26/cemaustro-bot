@@ -23,6 +23,18 @@ export const FORMATOS = {
   '.md': 'texto',
 };
 
+/** Tipo con el que se devuelve el archivo original al descargarlo. */
+const TIPOS = {
+  '.pdf': 'application/pdf',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.txt': 'text/plain; charset=utf-8',
+  '.md': 'text/plain; charset=utf-8',
+};
+
+export function tipoDeArchivo(nombre = '') {
+  return TIPOS[formatoDe(nombre)] ?? 'application/octet-stream';
+}
+
 export function formatoDe(nombre = '') {
   const punto = String(nombre).lastIndexOf('.');
   if (punto === -1) return null;

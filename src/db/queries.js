@@ -6,6 +6,7 @@
  */
 import { obtenerDB } from './database.js';
 import { ahoraISO, enDias } from '../utils/datetime.js';
+import { comoLocal, variantesDeTelefono } from '../utils/telefono.js';
 
 /**
  * "Ahora" en el mismo formato que usa JavaScript (ISO 8601 en UTC).
@@ -17,6 +18,16 @@ import { ahoraISO, enDias } from '../utils/datetime.js';
  * fechas como hora local. Todas las marcas de tiempo se guardan en ISO.
  */
 const AHORA_SQL = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
+
+/**
+ * Orden para elegir LA sesión de un paciente cuando tiene varias (una por
+ * cada número desde el que se verificó): primero la vigente, y si no hay,
+ * la última verificación. No sirve ordenar por id: al volver a verificarse
+ * desde un número que ya usó, la fila vieja se reaprovecha y conserva su id.
+ * Espera un parámetro: la hora actual.
+ */
+const SESION_QUE_MANDA = `ORDER BY (x.revoked_at IS NULL AND x.expires_at > ?) DESC,
+                                   x.verified_at DESC, x.id DESC`;
 
 /* ================================================================== */
 /* Pacientes                                                           */
@@ -114,6 +125,8 @@ export function listarPacientes({ soloActivos = false, busqueda = '' } = {}) {
 
   const donde = filtros.length ? `WHERE ${filtros.join(' AND ')}` : '';
 
+  // Una sola sesión por paciente (la que manda, ver SESION_QUE_MANDA): con
+  // un JOIN directo, quien se verificó desde dos números salía dos veces.
   return obtenerDB()
     .prepare(
       `SELECT p.*,
@@ -122,11 +135,12 @@ export function listarPacientes({ soloActivos = false, busqueda = '' } = {}) {
               (SELECT COUNT(*) FROM glucose_readings g WHERE g.patient_id = p.id) AS lecturas,
               (SELECT COUNT(*) FROM alerts a WHERE a.patient_id = p.id AND a.resolved_at IS NULL) AS alertas_abiertas
          FROM patients p
-         LEFT JOIN sessions s ON s.patient_id = p.id
+         LEFT JOIN sessions s ON s.id = (
+              SELECT x.id FROM sessions x WHERE x.patient_id = p.id ${SESION_QUE_MANDA} LIMIT 1)
          ${donde}
         ORDER BY p.name COLLATE NOCASE`,
     )
-    .all(...parametros);
+    .all(ahoraISO(), ...parametros);
 }
 
 /**
@@ -196,16 +210,28 @@ export function sesionVigente(telefono) {
 }
 
 /**
- * Última sesión de un paciente, esté vigente o no.
+ * La sesión que manda de un paciente, esté vigente o no.
  * La ficha del panel la necesita para poder decir si su número está
- * verificado, caducado o revocado.
+ * verificado, caducado o revocado, y desde qué número se verificó.
  */
 export function sesionDePaciente(pacienteId) {
   return (
     obtenerDB()
-      .prepare('SELECT * FROM sessions WHERE patient_id = ? ORDER BY id DESC LIMIT 1')
-      .get(pacienteId) ?? null
+      .prepare(`SELECT * FROM sessions x WHERE x.patient_id = ? ${SESION_QUE_MANDA} LIMIT 1`)
+      .get(pacienteId, ahoraISO()) ?? null
   );
+}
+
+/** Todos los números desde los que un paciente se verificó o usó un código. */
+export function telefonosDePaciente(pacienteId) {
+  return obtenerDB()
+    .prepare(
+      `SELECT phone FROM patients WHERE id = ? AND phone IS NOT NULL
+       UNION SELECT phone FROM sessions WHERE patient_id = ?
+       UNION SELECT used_by_phone FROM link_codes WHERE patient_id = ? AND used_by_phone IS NOT NULL`,
+    )
+    .pluck()
+    .all(pacienteId, pacienteId, pacienteId);
 }
 
 /** Crea o renueva la sesión de un teléfono. */
@@ -318,6 +344,23 @@ export function ultimosIntentos(limite = 50) {
   return obtenerDB()
     .prepare('SELECT * FROM auth_attempts ORDER BY id DESC LIMIT ?')
     .all(limite);
+}
+
+/**
+ * Intentos que tienen que ver con un paciente: los hechos desde cualquiera
+ * de sus números, y los que dieron una cédula que se enmascara igual que la
+ * suya. Así en la ficha se ve, por ejemplo, que desde su número alguien
+ * está escribiendo otra cédula.
+ */
+export function intentosDePaciente(telefonos, cedulaEnmascarada, limite = 30) {
+  const marcas = telefonos.map(() => '?').join(', ') || 'NULL';
+  return obtenerDB()
+    .prepare(
+      `SELECT * FROM auth_attempts
+        WHERE phone IN (${marcas}) OR cedula_masked = ?
+        ORDER BY id DESC LIMIT ?`,
+    )
+    .all(...telefonos, cedulaEnmascarada, limite);
 }
 
 /* ================================================================== */
@@ -468,6 +511,10 @@ export function alertasDe(pacienteId, limite = 100) {
     .all(pacienteId, limite);
 }
 
+export function obtenerAlerta(alertaId) {
+  return obtenerDB().prepare('SELECT * FROM alerts WHERE id = ?').get(alertaId) ?? null;
+}
+
 export function resolverAlerta(alertaId) {
   return (
     obtenerDB()
@@ -496,11 +543,57 @@ export function listarDocumentos() {
     .prepare(
       `SELECT d.*,
               LENGTH(d.content) AS caracteres,
-              (SELECT COUNT(*) FROM chunks c WHERE c.document_id = d.id) AS fragmentos
+              (SELECT COUNT(*) FROM chunks c WHERE c.document_id = d.id) AS fragmentos,
+              (SELECT f.filename FROM document_files f WHERE f.document_id = d.id) AS archivo
          FROM documents d
         ORDER BY d.id DESC`,
     )
     .all();
+}
+
+export function fragmentosDe(documentoId) {
+  return obtenerDB().prepare('SELECT COUNT(*) AS n FROM chunks WHERE document_id = ?').get(documentoId).n;
+}
+
+/* ---- Archivo original del documento ---- */
+
+/** Deja el archivo recién subido esperando a que el doctor guarde el documento. */
+export function guardarArchivoPendiente({ token, nombre, tipo, datos }) {
+  obtenerDB()
+    .prepare('INSERT INTO document_files (token, filename, mime, size, data) VALUES (?, ?, ?, ?, ?)')
+    .run(token, nombre, tipo, datos.length, datos);
+}
+
+/** Liga el archivo que esperaba con ese token al documento ya guardado. */
+export function ligarArchivo(token, documentoId) {
+  return (
+    obtenerDB()
+      .prepare(
+        'UPDATE document_files SET document_id = ?, token = NULL WHERE token = ? AND document_id IS NULL',
+      )
+      .run(documentoId, token).changes > 0
+  );
+}
+
+/** Datos del archivo de un documento, sin el contenido. */
+export function archivoDeDocumento(documentoId) {
+  return (
+    obtenerDB()
+      .prepare('SELECT id, filename, mime, size, created_at FROM document_files WHERE document_id = ?')
+      .get(documentoId) ?? null
+  );
+}
+
+/** El archivo con su contenido, para descargarlo. */
+export function contenidoDeArchivo(documentoId) {
+  return obtenerDB().prepare('SELECT * FROM document_files WHERE document_id = ?').get(documentoId) ?? null;
+}
+
+/** Borra los archivos subidos que nadie llegó a guardar como documento. */
+export function descartarArchivosPendientes(antesDeISO) {
+  return obtenerDB()
+    .prepare('DELETE FROM document_files WHERE document_id IS NULL AND created_at < ?')
+    .run(antesDeISO).changes;
 }
 
 export function activarDocumento(id, activo) {
@@ -770,6 +863,15 @@ export function borrarDatosDePaciente(pacienteId) {
       correr('DELETE FROM consents WHERE phone = ?', telefono);
     }
     correr('DELETE FROM consents WHERE patient_id = ?', pacienteId);
+    // Su historial, y sus números donde aparezcan en el de otros (un número
+    // que pasó de una ficha a otra queda anotado en las dos).
+    correr('DELETE FROM audit_log WHERE patient_id = ?', pacienteId);
+    for (const telefono of telefonos) {
+      for (const forma of new Set([telefono, comoLocal(telefono)])) {
+        db.prepare("UPDATE audit_log SET detail = REPLACE(detail, ?, '(número borrado)') WHERE detail LIKE ?")
+          .run(forma, `%${forma}%`);
+      }
+    }
     correr('DELETE FROM messages WHERE patient_id = ?', pacienteId);
     correr('DELETE FROM glucose_readings WHERE patient_id = ?', pacienteId);
     correr('DELETE FROM alerts WHERE patient_id = ?', pacienteId);
@@ -805,4 +907,143 @@ export function registrarBorrado({ pacienteRef = null, solicitadoPor, teniaAlert
 
 export function ultimosBorrados(limite = 50) {
   return obtenerDB().prepare('SELECT * FROM deletions ORDER BY id DESC LIMIT ?').all(limite);
+}
+/* ================================================================== */
+/* Historial de cambios                                                */
+/* ================================================================== */
+
+export function registrarEvento({ actor, accion, pacienteId = null, detalle = null }) {
+  obtenerDB()
+    .prepare('INSERT INTO audit_log (actor, action, patient_id, detail) VALUES (?, ?, ?, ?)')
+    .run(actor, accion, pacienteId, detalle);
+}
+
+/** Historial de un paciente, del más nuevo al más viejo. */
+export function eventosDePaciente(pacienteId, limite = 50) {
+  return obtenerDB()
+    .prepare('SELECT * FROM audit_log WHERE patient_id = ? ORDER BY id DESC LIMIT ?')
+    .all(pacienteId, limite);
+}
+
+/**
+ * Búsqueda en el historial del panel.
+ *
+ * @param {object} filtros
+ * @param {string} [filtros.texto] nombre, cédula o teléfono del paciente, o
+ *   cualquier cosa que aparezca en el detalle
+ * @param {string} [filtros.actor] 'panel:<usuario>', 'paciente' o 'sistema'
+ * @param {string[]} [filtros.acciones] prefijos de acción ('paciente.', 'sesion.')
+ * @param {string} [filtros.desde] ISO, incluido
+ * @param {string} [filtros.hasta] ISO, excluido
+ */
+export function buscarEventos({ texto = '', actor = '', acciones = [], desde = '', hasta = '', limite = 200 } = {}) {
+  const filtros = [];
+  const parametros = [];
+
+  if (texto) {
+    const enDetalle = [`%${texto}%`, ...variantesDeTelefono(texto).map((v) => `%${v}%`)];
+    const partes = enDetalle.map(() => 'e.detail LIKE ?');
+    parametros.push(...enDetalle);
+    const ids = pacientesQueCoinciden(texto);
+    if (ids.length) {
+      partes.push(`e.patient_id IN (${ids.map(() => '?').join(', ')})`);
+      parametros.push(...ids);
+    }
+    filtros.push(`(${partes.join(' OR ')})`);
+  }
+  if (actor) {
+    filtros.push('e.actor = ?');
+    parametros.push(actor);
+  }
+  if (acciones.length) {
+    filtros.push(`(${acciones.map(() => 'e.action LIKE ?').join(' OR ')})`);
+    parametros.push(...acciones.map((a) => `${a}%`));
+  }
+  if (desde) {
+    filtros.push('e.created_at >= ?');
+    parametros.push(desde);
+  }
+  if (hasta) {
+    filtros.push('e.created_at < ?');
+    parametros.push(hasta);
+  }
+
+  const donde = filtros.length ? `WHERE ${filtros.join(' AND ')}` : '';
+  return obtenerDB()
+    .prepare(
+      `SELECT e.*, p.name AS patient_name
+         FROM audit_log e
+         LEFT JOIN patients p ON p.id = e.patient_id
+         ${donde}
+        ORDER BY e.id DESC LIMIT ?`,
+    )
+    .all(...parametros, limite);
+}
+
+/**
+ * Intentos de verificación para la búsqueda del historial. El texto se busca
+ * como teléfono (en cualquiera de sus formas), como cédula y como paciente:
+ * si coincide con uno, entran los intentos de todos sus números.
+ *
+ * @param {string} [filtros.cedulaEnmascarada] si el texto es una cédula
+ *   completa, cómo se ve enmascarada (así se guarda en los intentos)
+ */
+export function buscarIntentos({ texto = '', cedulaEnmascarada = '', desde = '', hasta = '', limite = 200 } = {}) {
+  const filtros = [];
+  const parametros = [];
+
+  if (texto) {
+    const partes = [];
+    for (const v of variantesDeTelefono(texto)) {
+      partes.push('a.phone LIKE ?');
+      parametros.push(`%${v}%`);
+    }
+    const digitos = texto.replace(/[^0-9]/g, '');
+    if (cedulaEnmascarada) {
+      partes.push('a.cedula_masked = ?');
+      parametros.push(cedulaEnmascarada);
+    } else if (digitos.length >= 4 && digitos.length <= 6) {
+      // Un final de cédula, como se lee en la tabla: 01****5513.
+      partes.push('a.cedula_masked LIKE ?');
+      parametros.push(`%${digitos.slice(-4)}`);
+    }
+    const telefonos = pacientesQueCoinciden(texto).flatMap((id) => telefonosDePaciente(id));
+    if (telefonos.length) {
+      partes.push(`a.phone IN (${telefonos.map(() => '?').join(', ')})`);
+      parametros.push(...telefonos);
+    }
+    if (!partes.length) return [];
+    filtros.push(`(${partes.join(' OR ')})`);
+  }
+  if (desde) {
+    filtros.push('a.created_at >= ?');
+    parametros.push(desde);
+  }
+  if (hasta) {
+    filtros.push('a.created_at < ?');
+    parametros.push(hasta);
+  }
+
+  const donde = filtros.length ? `WHERE ${filtros.join(' AND ')}` : '';
+  return obtenerDB()
+    .prepare(`SELECT a.* FROM auth_attempts a ${donde} ORDER BY a.id DESC LIMIT ?`)
+    .all(...parametros, limite);
+}
+
+/** Quién ha hecho algo alguna vez, para el filtro "Quién" del historial. */
+export function actoresDelHistorial() {
+  return obtenerDB().prepare('SELECT DISTINCT actor FROM audit_log ORDER BY actor').pluck().all();
+}
+
+/** Ids de pacientes cuyo nombre, cédula o teléfono coincide con el texto. */
+function pacientesQueCoinciden(texto) {
+  const patron = `%${texto}%`;
+  const telefonos = variantesDeTelefono(texto).map((v) => `%${v}%`);
+  return obtenerDB()
+    .prepare(
+      `SELECT id FROM patients
+        WHERE name LIKE ? OR cedula LIKE ? ${telefonos.map(() => 'OR phone LIKE ?').join(' ')}`,
+    )
+    .pluck()
+    .all(patron, patron, ...telefonos);
 }

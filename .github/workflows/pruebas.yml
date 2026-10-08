@@ -1,0 +1,23 @@
+# Corre las pruebas en Linux con cada push y cada pull request.
+#
+# En la PC de desarrollo (Windows con Control inteligente de aplicaciones) el
+# binario de better-sqlite3 puede quedar bloqueado y las pruebas no arrancan;
+# aquí corren en el mismo sistema y la misma versión de Node que producción.
+name: Pruebas
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test

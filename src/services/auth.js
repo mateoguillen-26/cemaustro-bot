@@ -29,7 +29,9 @@ import { config } from '../config.js';
 import { logger, ofuscarTelefono, ofuscarCedula } from '../utils/logger.js';
 import { extraerCedula, extraerCodigo } from '../utils/cedula.js';
 import { enMinutos } from '../utils/datetime.js';
+import { comoLocal } from '../utils/telefono.js';
 import * as db from '../db/queries.js';
+import { anotar } from './bitacora.js';
 
 /** Resultado de intentar verificar un mensaje entrante. */
 export const RESULTADO = {
@@ -174,6 +176,13 @@ export function pidioCerrarSesion(texto = '') {
 /** Cierra la sesión de un paciente a petición suya. */
 export function cerrarSesion(paciente) {
   db.revocarSesionesDe(paciente.id);
+  // El "salir" no se guarda en la conversación: sin esto no quedaría rastro.
+  anotar({
+    actor: 'paciente',
+    accion: 'sesion.cerrada_paciente',
+    pacienteId: paciente.id,
+    detalle: `Desde ${comoLocal(paciente.phone)}`,
+  });
   logger.info(`El paciente #${paciente.id} cerró su sesión.`);
   return MENSAJES.sesionCerrada();
 }
@@ -257,7 +266,26 @@ export function intentarVerificar(telefono, texto) {
     return { resultado: RESULTADO.PENDIENTE, paciente: null, respuesta: MENSAJES.noSePudo() };
   }
 
+  const otro = db.pacientePorTelefono(telefono);
   const vinculado = db.vincularTelefono(paciente.id, telefono);
+
+  if (paciente.phone !== telefono) {
+    anotar({
+      actor: 'paciente',
+      accion: 'telefono.vinculado',
+      pacienteId: paciente.id,
+      detalle: `${paciente.phone ? comoLocal(paciente.phone) : 'Sin número'} → ${comoLocal(telefono)}`,
+    });
+  }
+  if (otro && otro.id !== paciente.id) {
+    anotar({
+      actor: 'sistema',
+      accion: 'telefono.quitado',
+      pacienteId: otro.id,
+      detalle: `Su número ${comoLocal(telefono)} pasó a la ficha #${paciente.id}, que lo vinculó con un código`,
+    });
+  }
+
   return verificar(vinculado, telefono, enmascarada, 'código de vinculación');
 }
 
@@ -267,6 +295,12 @@ function verificar(paciente, telefono, cedulaEnmascarada, via) {
   db.registrarIntento(telefono, cedulaEnmascarada, 'ok', via);
   // Lo que aceptó este número antes de dar la cédula pasa a su ficha.
   db.ligarConsentimientos(telefono, paciente.id);
+  anotar({
+    actor: 'paciente',
+    accion: 'sesion.verificada',
+    pacienteId: paciente.id,
+    detalle: `Desde ${comoLocal(telefono)} (${via})`,
+  });
   logger.info(
     `Paciente #${paciente.id} verificado desde ${ofuscarTelefono(telefono)} (${via}).`,
   );

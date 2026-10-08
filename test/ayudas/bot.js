@@ -53,7 +53,15 @@ export async function levantarBot({ puertoBot, puertoWhatsapp, entorno = {} }) {
   });
   await new Promise((r) => whatsappFalso.listen(puertoWhatsapp, '127.0.0.1', r));
 
-  const { servidor } = await import('../../src/index.js');
+  // Si el bot no arranca, el WhatsApp de mentira dejaría vivo el proceso y la
+  // prueba se quedaría colgada sin decir por qué: se cierra y se ve el error.
+  let servidor;
+  try {
+    ({ servidor } = await import('../../src/index.js'));
+  } catch (error) {
+    whatsappFalso.close();
+    throw error;
+  }
   await new Promise((r) => setTimeout(r, 300));
   const database = await import('../../src/db/database.js');
   const db = database.obtenerDB();

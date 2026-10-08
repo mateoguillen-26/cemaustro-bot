@@ -7,6 +7,9 @@ import { esc, etiquetaNivel, requisitosDePassword, scriptDeRequisitos } from './
 import { fechaCorta, diaCorto } from '../utils/datetime.js';
 import { ETIQUETA_CONTEXTO, clasificar } from '../services/glucemias.js';
 import { CATALOGO } from '../services/ajustes.js';
+import { ACCIONES, GRUPOS, quien } from '../services/bitacora.js';
+import { comoLocal } from '../utils/telefono.js';
+import { ofuscarCedula } from '../utils/logger.js';
 
 /* ------------------------------------------------------------------ */
 /* Resumen                                                             */
@@ -57,17 +60,42 @@ export function resumen(m, alertasAbiertas) {
 /* Pacientes                                                           */
 /* ------------------------------------------------------------------ */
 
-function estadoDelNumero(p) {
-  if (!p.active) return '<span class="etiqueta et-gris">Inactivo</span>';
-  if (!p.phone) return '<span class="etiqueta et-gris">Sin número</span>';
-  const vigente =
-    p.session_expires_at && !p.session_revoked_at && p.session_expires_at > new Date().toISOString();
-  return vigente
-    ? '<span class="etiqueta et-ok">Verificado</span>'
-    : '<span class="etiqueta et-aviso">Sin verificar</span>';
+/** ¿Esta sesión sigue sirviendo? (ni cerrada ni vencida) */
+export function sesionAbierta(sesion) {
+  return Boolean(sesion && !sesion.revoked_at && sesion.expires_at > new Date().toISOString());
 }
 
-export function pacientes(lista, busqueda) {
+/** Estados del número de un paciente, con su etiqueta. */
+export const ESTADOS_DEL_NUMERO = {
+  verificado: '<span class="etiqueta et-ok">Verificado</span>',
+  sin_verificar: '<span class="etiqueta et-aviso">Sin verificar</span>',
+  sin_numero: '<span class="etiqueta et-gris">Sin número</span>',
+  inactivo: '<span class="etiqueta et-gris">Inactivo</span>',
+};
+
+export function estadoDelNumeroDe(p) {
+  if (!p.active) return 'inactivo';
+  if (!p.phone) return 'sin_numero';
+  return sesionAbierta({ expires_at: p.session_expires_at, revoked_at: p.session_revoked_at })
+    ? 'verificado'
+    : 'sin_verificar';
+}
+
+function estadoDelNumero(p) {
+  return ESTADOS_DEL_NUMERO[estadoDelNumeroDe(p)];
+}
+
+export function pacientes(lista, busqueda, estado = '') {
+  const opcionesEstado = [
+    ['', 'Todos'],
+    ['verificado', 'Verificados'],
+    ['sin_verificar', 'Sin verificar'],
+    ['sin_numero', 'Sin número'],
+    ['inactivo', 'Inactivos'],
+  ]
+    .map(([v, t]) => `<option value="${v}" ${v === estado ? 'selected' : ''}>${t}</option>`)
+    .join('');
+
   const filas = lista
     .map(
       (p) => `<tr>
@@ -92,8 +120,12 @@ export function pacientes(lista, busqueda) {
           <label for="q">Buscar</label>
           <input type="text" id="q" name="q" value="${esc(busqueda)}" placeholder="Nombre, cédula o teléfono">
         </div>
+        <div style="flex:0 0 180px">
+          <label for="estado">Número</label>
+          <select id="estado" name="estado">${opcionesEstado}</select>
+        </div>
         <button type="submit">Buscar</button>
-        ${busqueda ? '<a href="/admin/pacientes" style="padding-bottom:10px">Limpiar</a>' : ''}
+        ${busqueda || estado ? '<a href="/admin/pacientes" style="padding-bottom:10px">Limpiar</a>' : ''}
       </form>
     </div>
 
@@ -197,7 +229,103 @@ function graficoGlucemias(lecturas) {
           <p class="sub" style="font-size:12px">Últimas ${orden.length} mediciones. Pase el cursor para ver el detalle.</p>`;
 }
 
-export function paciente({ paciente: p, lecturas, resumenGlucemias, conversacion, alertas, codigo, codigoPendiente, consentimiento, puedeBorrar = false }) {
+/** Lo que cierra una sesión, para poder decir en la ficha quién la cerró. */
+const CIERRES = new Set([
+  'sesion.cerrada_panel',
+  'sesion.cerrada_paciente',
+  'paciente.telefono',
+  'paciente.estado',
+  'telefono.vinculado',
+  'telefono.quitado',
+]);
+
+/**
+ * Número y verificación: lo que hizo falta saber en el caso del 01/10/2026
+ * y no estaba a la vista. Desde qué número se verificó, si la sesión sigue,
+ * quién la cerró, y si el número registrado ya no es aquel.
+ */
+function bloqueVerificacion(p, sesion, eventos) {
+  const fila = (clave, valor) => `<tr><th>${clave}</th><td>${valor}</td></tr>`;
+  const filas = [
+    fila('Cédula', esc(p.cedula)),
+    fila('Teléfono registrado', p.phone ? esc(comoLocal(p.phone)) : 'Ninguno'),
+    fila('Estado', estadoDelNumero(p)),
+  ];
+
+  if (!sesion) {
+    filas.push(fila('Verificación', 'Nunca se ha verificado.'));
+  } else {
+    filas.push(fila('Se verificó desde', `${esc(comoLocal(sesion.phone))} · el ${esc(fechaCorta(sesion.verified_at))}`));
+    filas.push(fila('Último uso', esc(fechaCorta(sesion.last_seen_at))));
+
+    if (sesion.revoked_at) {
+      const cerrada = new Date(sesion.revoked_at).getTime();
+      const causa = eventos.find(
+        (e) => CIERRES.has(e.action) && Math.abs(new Date(e.created_at).getTime() - cerrada) < 10_000,
+      );
+      filas.push(
+        fila(
+          'Sesión',
+          `Cerrada el ${esc(fechaCorta(sesion.revoked_at))}<br><span class="sub" style="font-size:13px">${
+            causa
+              ? `${esc(ACCIONES[causa.action] ?? causa.action)} — ${esc(quien(causa.actor))}${causa.detail ? `: ${esc(causa.detail)}` : ''}`
+              : 'No quedó registro de quién la cerró: fue antes de que el panel guardara el historial.'
+          }</span>`,
+        ),
+      );
+    } else if (!sesionAbierta(sesion)) {
+      filas.push(fila('Sesión', `Venció el ${esc(fechaCorta(sesion.expires_at))}`));
+    } else {
+      filas.push(fila('Sesión', `Abierta, vence el ${esc(fechaCorta(sesion.expires_at))}`));
+    }
+  }
+
+  const otroNumero =
+    sesion && p.phone && sesion.phone !== p.phone
+      ? `<p class="aviso aviso-error" style="margin:12px 0 0">
+           Se verificó desde <b>${esc(comoLocal(sesion.phone))}</b>, pero el número registrado ahora es
+           <b>${esc(comoLocal(p.phone))}</b>. Si ${esc(comoLocal(p.phone))} es de este paciente, tiene que
+           escribir su cédula desde ese número. Si no lo es, corrija el teléfono.
+         </p>`
+      : '';
+
+  return `<table class="claves"><tbody>${filas.join('')}</tbody></table>${otroNumero}`;
+}
+
+/**
+ * Lo que ha pasado con esta ficha: los cambios del historial y los intentos
+ * de verificación desde sus números o con su cédula, juntos y por fecha.
+ */
+function historialDeFicha(p, eventos, intentos) {
+  const propia = ofuscarCedula(p.cedula);
+  const filas = [
+    ...eventos.map((e) => ({
+      cuando: e.created_at,
+      html: `<td>${esc(quien(e.actor))}</td>
+             <td>${esc(ACCIONES[e.action] ?? e.action)}</td>
+             <td>${esc(e.detail ?? '')}</td>`,
+    })),
+    ...intentos.map((i) => {
+      const notas = [];
+      if (i.cedula_masked && i.cedula_masked !== propia) notas.push('con <b>otra cédula</b>, no la de este paciente');
+      if (p.phone && i.phone !== p.phone) notas.push('desde un número que no es el registrado');
+      return {
+        cuando: i.created_at,
+        html: `<td>${esc(comoLocal(i.phone))}</td>
+               <td>${i.outcome === 'ok' ? '<span class="etiqueta et-ok">Verificado</span>' : '<span class="etiqueta et-urgente">Intento fallido</span>'}</td>
+               <td>${esc(i.cedula_masked ?? '')} · ${esc(i.reason ?? '')}${notas.length ? `<br><span class="sub" style="font-size:13px">${notas.join('; ')}</span>` : ''}</td>`,
+      };
+    }),
+  ]
+    .sort((a, b) => (a.cuando < b.cuando ? 1 : -1))
+    .slice(0, 40);
+
+  if (filas.length === 0) return '<p class="vacio">Todavía no hay nada anotado.</p>';
+  return `<table><thead><tr><th>Cuándo</th><th>Quién</th><th>Qué</th><th>Detalle</th></tr></thead>
+          <tbody>${filas.map((f) => `<tr><td>${esc(fechaCorta(f.cuando))}</td>${f.html}</tr>`).join('')}</tbody></table>`;
+}
+
+export function paciente({ paciente: p, sesion = null, eventos = [], intentos = [], lecturas, resumenGlucemias, conversacion, alertas, codigo, codigoPendiente, consentimiento, puedeBorrar = false, verHistorial = false }) {
   const bloqueCodigo = codigo
     ? `<div class="tarjeta" style="border-color:var(--acento)">
          <b>Código de vinculación para ${esc(p.name)}</b>
@@ -265,6 +393,9 @@ export function paciente({ paciente: p, lecturas, resumenGlucemias, conversacion
 
     ${bloqueCodigo}
 
+    <h2>Número y verificación</h2>
+    <div class="tarjeta">${bloqueVerificacion(p, sesion, eventos)}</div>
+
     <h2>Datos</h2>
     <div class="tarjeta">
       <form method="post" action="/admin/pacientes/${p.id}">
@@ -272,6 +403,10 @@ export function paciente({ paciente: p, lecturas, resumenGlucemias, conversacion
           <div style="flex:2; min-width:240px">
             <label for="name">Nombre completo</label>
             <input type="text" id="name" name="name" value="${esc(p.name)}" required>
+          </div>
+          <div style="flex:0 0 150px">
+            <label for="cedula-fija">Cédula <small>No se puede cambiar.</small></label>
+            <input type="text" id="cedula-fija" value="${esc(p.cedula)}" readonly>
           </div>
           <div style="flex:1; min-width:200px">
             <label for="phone">Teléfono <small>Cambiarlo cierra la sesión actual.</small></label>
@@ -354,6 +489,16 @@ export function paciente({ paciente: p, lecturas, resumenGlucemias, conversacion
     <div class="tarjeta">
       ${conversacion.length === 0 ? '<p class="vacio">Todavía no ha escrito.</p>' : `<div class="chat">${burbujas}</div>`}
     </div>
+
+    <h2>Historial de la ficha</h2>
+    <div class="tarjeta">
+      ${historialDeFicha(p, eventos, intentos)}
+      <p class="sub" style="font-size:12px; margin:12px 0 0">
+        Cambios hechos desde el panel (con el usuario), verificaciones y cierres de sesión, e
+        intentos de verificación desde sus números o con su cédula.
+        ${verHistorial ? `<a href="/admin/historial?q=${encodeURIComponent(p.cedula)}">Buscar en el historial completo</a>` : ''}
+      </p>
+    </div>
     ${puedeBorrar ? bloqueBorrado(p, alertas) : ''}`;
 }
 
@@ -430,12 +575,14 @@ export function conocimiento(documentos) {
   const filas = documentos
     .map(
       (d) => `<tr>
-        <td><b>${esc(d.title)}</b>${d.source ? `<br><span class="sub" style="font-size:12px">${esc(d.source)}</span>` : ''}</td>
+        <td><a href="/admin/conocimiento/${d.id}"><b>${esc(d.title)}</b></a>${d.source ? `<br><span class="sub" style="font-size:12px">${esc(d.source)}</span>` : ''}
+            ${d.archivo ? '<br><span class="etiqueta et-gris" style="margin-top:4px">Original guardado</span>' : ''}</td>
         <td>${d.caracteres.toLocaleString('es-EC')} caracteres</td>
         <td>${d.fragmentos > 0 ? `${d.fragmentos} fragmentos` : '<span class="etiqueta et-aviso">Sin indexar</span>'}</td>
         <td>${d.active ? '<span class="etiqueta et-ok">En uso</span>' : '<span class="etiqueta et-gris">Apagado</span>'}</td>
         <td>${esc(fechaCorta(d.created_at))}</td>
-        <td>
+        <td class="acciones">
+          <a href="/admin/conocimiento/${d.id}" class="boton chico secundario">Ver</a>
           <form method="post" action="/admin/conocimiento/${d.id}/activar" class="enlinea">
             <input type="hidden" name="activo" value="${d.active ? '0' : '1'}">
             <button class="chico secundario">${d.active ? 'Apagar' : 'Encender'}</button>
@@ -873,7 +1020,7 @@ export function restablecerPassword(objetivo) {
 /* Revisar un documento recién leído de un archivo                     */
 /* ------------------------------------------------------------------ */
 
-export function revisarDocumento({ titulo, fuente, contenido }) {
+export function revisarDocumento({ titulo, fuente, contenido, archivo = null }) {
   const parrafos = contenido.split(/\n\s*\n/).filter(Boolean).length;
   const palabras = contenido.split(/\s+/).filter(Boolean).length;
 
@@ -892,6 +1039,7 @@ export function revisarDocumento({ titulo, fuente, contenido }) {
         <input type="text" id="titulo" name="titulo" value="${esc(titulo)}" required maxlength="120">
 
         <input type="hidden" name="fuente" value="${esc(fuente)}">
+        ${archivo ? `<input type="hidden" name="archivo" value="${esc(archivo)}">` : ''}
 
         <label for="contenido">Texto
           <small>Repase por encima y corrija lo que haya salido torcido. Deje una
@@ -905,5 +1053,196 @@ export function revisarDocumento({ titulo, fuente, contenido }) {
           <a href="/admin/conocimiento" style="padding-bottom:10px">Descartar</a>
         </div>
       </form>
+    </div>`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Confirmar un cambio que deja sin acceso a un paciente verificado    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Se muestra en lugar de guardar. Lleva todo lo que se escribió en el
+ * formulario en campos ocultos, así que "Sí, guardar" manda exactamente lo
+ * mismo, más la confirmación.
+ */
+export function confirmarCambioDePaciente({ paciente: p, sesion, telefonoNuevo, desactiva, campos }) {
+  const ocultos = Object.entries(campos)
+    .filter(([clave]) => clave !== 'confirmado')
+    .map(([clave, valor]) => `<input type="hidden" name="${esc(clave)}" value="${esc(valor)}">`)
+    .join('');
+
+  const usado = comoLocal(sesion.phone);
+  const consecuencias = [];
+  if (telefonoNuevo !== undefined) {
+    consecuencias.push(
+      `El número registrado pasa de <b>${esc(comoLocal(p.phone) || 'ninguno')}</b> a
+       <b>${esc(telefonoNuevo ? comoLocal(telefonoNuevo) : 'ninguno')}</b>.`,
+    );
+  }
+  if (desactiva) consecuencias.push('El paciente queda <b>inactivo</b>: el bot deja de responderle.');
+  consecuencias.push(`El bot deja de atenderle en <b>${esc(usado)}</b> en este mismo momento.`);
+  if (telefonoNuevo && !desactiva) {
+    consecuencias.push(
+      `Para volver a usar el asistente tendrá que escribir <b>su cédula desde ${esc(comoLocal(telefonoNuevo))}</b>.
+       Si ese número no es suyo, no podrá entrar.`,
+    );
+  }
+  consecuencias.push('Su conversación, glucemias y alertas no se borran.');
+
+  return `
+    <p style="margin:0 0 6px"><a href="/admin/pacientes/${p.id}">← ${esc(p.name)}</a></p>
+    <h1>¿Seguro? ${esc(p.name)} perderá el acceso</h1>
+    <p class="sub">Todavía no se ha guardado nada.</p>
+
+    <div class="tarjeta" style="border-color:var(--aviso)">
+      <p style="margin-top:0">
+        Está <b>verificado</b> y usa el asistente desde <b>${esc(usado)}</b>
+        (se verificó el ${esc(fechaCorta(sesion.verified_at))}; última vez el ${esc(fechaCorta(sesion.last_seen_at))}).
+        Si guarda este cambio:
+      </p>
+      <ul>${consecuencias.map((c) => `<li>${c}</li>`).join('')}</ul>
+      <p class="sub" style="font-size:13px">
+        Antes de seguir, confirme con el paciente cuál es su número. Quedará anotado en el
+        historial que usted hizo este cambio.
+      </p>
+      <form method="post" action="/admin/pacientes/${p.id}" class="barra">
+        ${ocultos}
+        <input type="hidden" name="confirmado" value="1">
+        <button type="submit" class="peligro">Sí, guardar el cambio</button>
+        <a href="/admin/pacientes/${p.id}" class="boton secundario">No, dejarlo como está</a>
+      </form>
+    </div>`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Historial                                                           */
+/* ------------------------------------------------------------------ */
+
+export function historial({ filas, filtros, actores, limite }) {
+  const opcion = (valor, texto, actual) =>
+    `<option value="${esc(valor)}" ${valor === actual ? 'selected' : ''}>${esc(texto)}</option>`;
+
+  const quienes = [
+    opcion('', 'Cualquiera', filtros.quien),
+    ...actores.filter((a) => a.startsWith('panel:')).map((a) => opcion(a, quien(a), filtros.quien)),
+    opcion('paciente', 'El paciente (WhatsApp)', filtros.quien),
+    opcion('sistema', 'El sistema', filtros.quien),
+  ].join('');
+
+  const ques = [
+    opcion('', 'Todo', filtros.que),
+    ...Object.entries(GRUPOS).map(([clave, g]) => opcion(clave, g.etiqueta, filtros.que)),
+  ].join('');
+
+  const cuerpo = filas
+    .map((f) => {
+      if (f.tipo === 'intento') {
+        return `<tr>
+          <td>${esc(fechaCorta(f.created_at))}</td>
+          <td>${esc(comoLocal(f.phone))}</td>
+          <td>${f.outcome === 'ok' ? '<span class="etiqueta et-ok">Verificado</span>' : '<span class="etiqueta et-urgente">Intento fallido</span>'}</td>
+          <td>—</td>
+          <td>${esc(f.cedula_masked ?? '')} · ${esc(f.reason ?? '')}</td>
+        </tr>`;
+      }
+      return `<tr>
+        <td>${esc(fechaCorta(f.created_at))}</td>
+        <td>${esc(quien(f.actor))}</td>
+        <td>${esc(ACCIONES[f.action] ?? f.action)}</td>
+        <td>${f.patient_id ? (f.patient_name ? `<a href="/admin/pacientes/${f.patient_id}">${esc(f.patient_name)}</a>` : `#${f.patient_id}`) : '—'}</td>
+        <td>${esc(f.detail ?? '')}</td>
+      </tr>`;
+    })
+    .join('');
+
+  const filtrando = filtros.q || filtros.quien || filtros.que || filtros.desde || filtros.hasta;
+
+  return `
+    <h1>Historial</h1>
+    <p class="sub">Quién hizo qué y cuándo: cambios desde el panel, lo que pasó con cada número y los intentos de verificación.</p>
+
+    <div class="tarjeta">
+      <form method="get" class="barra">
+        <div style="flex:2; min-width:220px">
+          <label for="q">Buscar <small>Nombre, cédula o teléfono (0991234567), o un texto del detalle.</small></label>
+          <input type="text" id="q" name="q" value="${esc(filtros.q)}" placeholder="0991234567">
+        </div>
+        <div style="flex:1; min-width:160px">
+          <label for="quien">Quién</label>
+          <select id="quien" name="quien">${quienes}</select>
+        </div>
+        <div style="flex:1; min-width:170px">
+          <label for="que">Qué</label>
+          <select id="que" name="que">${ques}</select>
+        </div>
+        <div style="flex:0 0 150px">
+          <label for="desde">Desde</label>
+          <input type="date" id="desde" name="desde" value="${esc(filtros.desde)}">
+        </div>
+        <div style="flex:0 0 150px">
+          <label for="hasta">Hasta</label>
+          <input type="date" id="hasta" name="hasta" value="${esc(filtros.hasta)}">
+        </div>
+        <button type="submit">Buscar</button>
+        ${filtrando ? '<a href="/admin/historial" style="padding-bottom:10px">Limpiar</a>' : ''}
+      </form>
+    </div>
+
+    <div class="tarjeta">
+      ${
+        filas.length === 0
+          ? '<p class="vacio">No hay nada que coincida.</p>'
+          : `<table><thead><tr><th>Cuándo</th><th>Quién</th><th>Qué</th><th>Paciente</th><th>Detalle</th></tr></thead>
+             <tbody>${cuerpo}</tbody></table>`
+      }
+      <p class="sub" style="font-size:12px; margin:12px 0 0">
+        ${filas.length >= limite ? `Se muestran los ${limite} más recientes: afine la búsqueda para ver más atrás. ` : ''}
+        Los cambios hechos desde el panel se anotan desde que existe esta pantalla; los intentos
+        de verificación, desde el principio. Al borrar todos los datos de un paciente, su
+        historial se borra también.
+      </p>
+    </div>`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Ver un documento del conocimiento                                   */
+/* ------------------------------------------------------------------ */
+
+function tamano(bytes) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+export function documento({ documento: d, archivo, fragmentos }) {
+  const original = archivo
+    ? `<p style="margin:0 0 6px">Archivo original: <b>${esc(archivo.filename)}</b> (${tamano(archivo.size)})</p>
+       <div class="barra">
+         ${archivo.mime === 'application/pdf' ? `<a href="/admin/conocimiento/${d.id}/original?ver=1" target="_blank" rel="noopener" class="boton secundario">Abrir el PDF</a>` : ''}
+         <a href="/admin/conocimiento/${d.id}/original" class="boton secundario">Descargar el original</a>
+         <a href="/admin/conocimiento/${d.id}/texto" class="boton secundario">Descargar el texto (.txt)</a>
+       </div>`
+    : `<p class="sub" style="margin:0 0 10px; font-size:13px">
+         ${
+           d.source && /\.(pdf|docx)$/i.test(d.source)
+             ? 'Se subió antes de que el panel guardara los archivos originales: queda solo el texto.'
+             : 'Este documento se cargó como texto: no tiene archivo original.'
+         }
+       </p>
+       <a href="/admin/conocimiento/${d.id}/texto" class="boton secundario">Descargar el texto (.txt)</a>`;
+
+  return `
+    <p style="margin:0 0 6px"><a href="/admin/conocimiento">← Conocimiento</a></p>
+    <h1>${esc(d.title)}</h1>
+    <p class="sub">
+      ${d.source ? `${esc(d.source)} · ` : ''}subido el ${esc(fechaCorta(d.created_at))} ·
+      ${d.active ? '<span class="etiqueta et-ok">En uso</span>' : '<span class="etiqueta et-gris">Apagado</span>'} ·
+      ${fragmentos > 0 ? `${fragmentos} fragmentos` : '<span class="etiqueta et-aviso">Sin indexar</span>'}
+    </p>
+
+    <div class="tarjeta">${original}</div>
+
+    <h2>Texto que usa el asistente</h2>
+    <div class="tarjeta">
+      <pre class="texto-doc">${esc(d.content)}</pre>
     </div>`;
 }
